@@ -1,0 +1,116 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  min-height: 100vh;
+  font-family: var(--font-body), "PingFang SC", "Microsoft YaHei", sans-serif;
+  background:
+    radial-gradient(circle at 12% 8%, rgba(227, 241, 226, 0.95), transparent 42%),
+    radial-gradient(circle at 88% 5%, rgba(249, 239, 228, 0.95), transparent 34%),
+    radial-gradient(circle at 70% 78%, rgba(220, 236, 228, 0.7), transparent 40%),
+    linear-gradient(155deg, #fcfdf9 0%, #f6fbf4 46%, #f1f7ef 100%);
+  color: #1f2a26;
+}
+
+h1,
+h2,
+h3 {
+  font-family: var(--font-title), "Songti SC", "STSong", serif;
+}
+
+.font-brand-cn {
+  font-family: "HanziPen SC", "STKaiti", "KaiTi", "Kaiti SC", "DFKai-SB", "Songti SC", serif;
+}
+
+.font-brand-en {
+  font-family: "Bradley Hand", "Segoe Script", "Snell Roundhand", "Brush Script MT", "Caveat", cursive;
+}
+
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at 18% 23%, rgba(79, 123, 86, 0.06) 0 5px, transparent 6px),
+    radial-gradient(circle at 80% 70%, rgba(79, 123, 86, 0.05) 0 4px, transparent 5px);
+  background-size: 180px 180px, 220px 220px;
+  opacity: 0.55;
+}
+
+@keyframes floatIn {
+  from {
+    opacity: 0;
+    transform: translateY(16px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes caretBlink {
+  0%,
+  48% {
+    opacity: 1;
+  }
+  49%,
+  100% {
+    opacity: 0;
+  }
+}
+
+.motion-float-in {
+  animation: floatIn 0.56s cubic-bezier(0.2, 0.65, 0.2, 1) both;
+}
+
+.motion-fade-up {
+  opacity: 0;
+  animation: fadeInUp 0.52s ease-out forwards;
+}
+
+.motion-delay-1 {
+  animation-delay: 0.1s;
+}
+
+.motion-delay-2 {
+  animation-delay: 0.2s;
+}
+
+.type-caret {
+  margin-left: 0.04em;
+  color: rgba(31, 42, 38, 0.58);
+  animation: caretBlink 1s steps(1, end) infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .motion-float-in,
+  .motion-fade-up,
+  .motion-delay-1,
+  .motion-delay-2,
+  .type-caret {
+    animation: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+  }
+}
