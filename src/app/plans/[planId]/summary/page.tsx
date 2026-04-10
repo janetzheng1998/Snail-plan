@@ -15,6 +15,15 @@ type PlanSummaryPageProps = {
   params: Promise<{ planId: string }>;
 };
 
+export function generateStaticParams() {
+  return [
+    { planId: "voice-lesson-10" },
+    { planId: "morning-expression-30" },
+    { planId: "running-endurance-20h" },
+    { planId: "prompt-writing-15" },
+  ];
+}
+
 export default async function PlanSummaryPage({ params }: PlanSummaryPageProps) {
   const { planId } = await params;
   const plan = getPlanById(planId);

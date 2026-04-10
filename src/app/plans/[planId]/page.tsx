@@ -9,15 +9,21 @@ import { getLatestRecord, getPlanById, getProgressPercent } from "@/lib/mock-dat
 
 type PlanDetailPageProps = {
   params: Promise<{ planId: string }>;
-  searchParams: Promise<{ saved?: string }>;
 };
 
+export function generateStaticParams() {
+  return [
+    { planId: "voice-lesson-10" },
+    { planId: "morning-expression-30" },
+    { planId: "running-endurance-20h" },
+    { planId: "prompt-writing-15" },
+  ];
+}
+
 export default async function PlanDetailPage({
-  params,
-  searchParams
+  params
 }: PlanDetailPageProps) {
   const { planId } = await params;
-  const query = await searchParams;
   const plan = getPlanById(planId);
 
   if (!plan) {
@@ -30,12 +36,6 @@ export default async function PlanDetailPage({
 
   return (
     <PageShell currentPath={`/plans/${plan.id}`}>
-      {query.saved === "1" ? (
-        <Card className="mb-6 border-moss-200 bg-moss-50/85 py-4">
-          <p className="text-sm text-moss-700">新记录已收好，继续保持这个节奏就很棒。</p>
-        </Card>
-      ) : null}
-
       <section className="grid gap-6 xl:grid-cols-[1.4fr_0.85fr]">
         <Card className="space-y-5 bg-gradient-to-br from-white to-moss-50/70">
           <div className="flex flex-wrap items-center gap-2">
