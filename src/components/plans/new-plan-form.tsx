@@ -5,6 +5,7 @@ import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button, buttonClasses } from "@/components/ui/button";
 import { Card, CardTitle } from "@/components/ui/card";
+import { saveLocalPlan } from "@/lib/local-plans";
 import { planCategories, progressUnits } from "@/lib/mock-data";
 import { cn } from "@/lib/utils";
 
@@ -27,7 +28,29 @@ export function NewPlanForm() {
   }, [isFlexiblePlan, planCycle, planName, targetValue, unit]);
 
   const onCreate = () => {
-    const nextPath = "/plans/voice-lesson-10/records/new";
+    const now = new Date();
+    const localDate = new Date(now.getTime() - now.getTimezoneOffset() * 60000)
+      .toISOString()
+      .slice(0, 10);
+    const normalizedName = planName.trim() || "未命名计划";
+    const normalizedDescription = description.trim() || "开始记录吧";
+    const normalizedCycle = planCycle.trim();
+    const nextPlan = saveLocalPlan({
+      title: normalizedName,
+      category,
+      description: normalizedCycle
+        ? `${normalizedDescription}\n周期：${normalizedCycle}`
+        : normalizedDescription,
+      status: "active",
+      started_at: localDate,
+      updated_at: localDate,
+      target_value: isFlexiblePlan ? 1 : Math.max(1, targetValue),
+      current_value: 0,
+      progress_unit: unit,
+      records: []
+    });
+    const nextPath = `/plans/${nextPlan.id}/records/new`;
+
     setCreated(true);
 
     setTimeout(() => {

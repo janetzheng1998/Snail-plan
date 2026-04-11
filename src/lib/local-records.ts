@@ -1,3 +1,4 @@
+import { appendRecordToLocalPlan } from "@/lib/local-plans";
 import type { PlanRecord, RecordUnit } from "@/lib/mock-data";
 
 const LOCAL_RECORDS_STORAGE_KEY = "snail-plan-local-records";
@@ -65,6 +66,7 @@ export function saveLocalRecord(record: SaveLocalRecordInput): LocalRecord {
   const filtered = existing.filter((item) => item.id !== nextRecord.id);
 
   writeLocalRecordsToStorage([nextRecord, ...filtered]);
+  appendRecordToLocalPlan(nextRecord.planId, localRecordToPlanRecord(nextRecord));
   return nextRecord;
 }
 
