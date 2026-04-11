@@ -10,15 +10,25 @@ type UseResolvedPlanResult = {
   isLocalPlan: boolean;
 };
 
-export function useResolvedPlan(planId: string): UseResolvedPlanResult {
-  const mockPlan = useMemo(() => getPlanById(planId), [planId]);
+export function useResolvedPlan(planId?: string): UseResolvedPlanResult {
+  const normalizedPlanId = planId?.trim() ?? "";
+  const mockPlan = useMemo(
+    () => (normalizedPlanId ? getPlanById(normalizedPlanId) : undefined),
+    [normalizedPlanId]
+  );
   const [localPlan, setLocalPlan] = useState<Plan>();
   const [hydrated, setHydrated] = useState(false);
 
   useEffect(() => {
-    setLocalPlan(getLocalPlanById(planId));
+    if (!normalizedPlanId) {
+      setLocalPlan(undefined);
+      setHydrated(true);
+      return;
+    }
+
+    setLocalPlan(getLocalPlanById(normalizedPlanId));
     setHydrated(true);
-  }, [planId]);
+  }, [normalizedPlanId]);
 
   return {
     plan: localPlan ?? mockPlan,

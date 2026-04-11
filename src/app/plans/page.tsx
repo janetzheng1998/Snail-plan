@@ -30,6 +30,7 @@ export default function MyPlansPage() {
       mergePlansWithLocal(mockPlans, localPlans).sort((a, b) => b.updated_at.localeCompare(a.updated_at)),
     [localPlans, mockPlans]
   );
+  const localPlanIdSet = useMemo(() => new Set(localPlans.map((plan) => plan.id)), [localPlans]);
 
   const activePlans = mergedPlans.filter((plan) => plan.status === "active");
   const completedPlans = mergedPlans.filter((plan) => plan.status === "completed");
@@ -40,7 +41,7 @@ export default function MyPlansPage() {
         <h3 className="text-2xl text-ink-900">进行中的计划</h3>
         <div className="grid gap-5 md:grid-cols-2">
           {activePlans.map((plan) => (
-            <PlanCard key={plan.id} plan={plan} mode="active" />
+            <PlanCard key={plan.id} plan={plan} mode="active" isLocalPlan={localPlanIdSet.has(plan.id)} />
           ))}
         </div>
       </section>
@@ -49,7 +50,12 @@ export default function MyPlansPage() {
         <h3 className="text-2xl text-ink-900">已完成的计划</h3>
         <div className="grid gap-5 md:grid-cols-2">
           {completedPlans.map((plan) => (
-            <PlanCard key={plan.id} plan={plan} mode="completed" />
+            <PlanCard
+              key={plan.id}
+              plan={plan}
+              mode="completed"
+              isLocalPlan={localPlanIdSet.has(plan.id)}
+            />
           ))}
         </div>
       </section>

@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { Button, buttonClasses } from "@/components/ui/button";
 import { Card, CardTitle } from "@/components/ui/card";
 import { saveLocalPlan } from "@/lib/local-plans";
+import { getPlanNewRecordPath } from "@/lib/plan-routes";
 import { planCategories, progressUnits } from "@/lib/mock-data";
 import { cn } from "@/lib/utils";
 
@@ -49,7 +50,7 @@ export function NewPlanForm() {
       progress_unit: unit,
       records: []
     });
-    const nextPath = `/plans/${nextPlan.id}/records/new`;
+    const nextPath = getPlanNewRecordPath(nextPlan.id, true);
 
     setCreated(true);
 

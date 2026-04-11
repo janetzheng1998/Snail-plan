@@ -9,13 +9,14 @@ import { buttonClasses } from "@/components/ui/button";
 import { Card, CardTitle } from "@/components/ui/card";
 import { Tag } from "@/components/ui/tag";
 import { getProgressPercent } from "@/lib/mock-data";
+import { getPlanDetailPath, getPlanNewRecordPath, getPlanSummaryPath } from "@/lib/plan-routes";
 
 type PlanDetailPageContentProps = {
   planId: string;
 };
 
 export function PlanDetailPageContent({ planId }: PlanDetailPageContentProps) {
-  const { plan, loading } = useResolvedPlan(planId);
+  const { plan, loading, isLocalPlan } = useResolvedPlan(planId);
 
   if (loading) {
     return (
@@ -43,9 +44,12 @@ export function PlanDetailPageContent({ planId }: PlanDetailPageContentProps) {
 
   const percent = getProgressPercent(plan);
   const isCompleted = plan.status === "completed";
+  const detailPath = getPlanDetailPath(plan.id, isLocalPlan);
+  const newRecordPath = getPlanNewRecordPath(plan.id, isLocalPlan);
+  const summaryPath = getPlanSummaryPath(plan.id, isLocalPlan);
 
   return (
-    <PageShell currentPath={`/plans/${plan.id}`}>
+    <PageShell currentPath={detailPath}>
       <section className="grid gap-6 xl:grid-cols-[1.4fr_0.85fr]">
         <Card className="space-y-5 bg-gradient-to-br from-white to-moss-50/70">
           <div className="flex flex-wrap items-center gap-2">
@@ -68,10 +72,10 @@ export function PlanDetailPageContent({ planId }: PlanDetailPageContentProps) {
           </div>
 
           <div className="flex flex-wrap gap-3 pt-1">
-            <Link href={`/plans/${plan.id}/records/new`} className={buttonClasses("primary", "lg")}>
+            <Link href={newRecordPath} className={buttonClasses("primary", "lg")}>
               新增记录
             </Link>
-            <Link href={`/plans/${plan.id}/summary`} className={buttonClasses("secondary", "lg")}>
+            <Link href={summaryPath} className={buttonClasses("secondary", "lg")}>
               {isCompleted ? "查看计划总结" : "标记完成并生成总结"}
             </Link>
           </div>

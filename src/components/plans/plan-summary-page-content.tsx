@@ -11,13 +11,14 @@ import {
   getPlanSummaryById,
   getProgressPercent
 } from "@/lib/mock-data";
+import { getPlanDetailPath } from "@/lib/plan-routes";
 
 type PlanSummaryPageContentProps = {
   planId: string;
 };
 
 export function PlanSummaryPageContent({ planId }: PlanSummaryPageContentProps) {
-  const { plan, loading } = useResolvedPlan(planId);
+  const { plan, loading, isLocalPlan } = useResolvedPlan(planId);
 
   if (loading) {
     return (
@@ -46,9 +47,10 @@ export function PlanSummaryPageContent({ planId }: PlanSummaryPageContentProps) 
   const summary = getPlanSummaryById(plan.id);
   const percent = getProgressPercent(plan);
   const completionDate = getPlanCompletionDate(plan);
+  const detailPath = getPlanDetailPath(plan.id, isLocalPlan);
 
   return (
-    <PageShell currentPath={`/plans/${plan.id}`}>
+    <PageShell currentPath={detailPath}>
       <section className="space-y-6">
         <Card className="overflow-hidden bg-gradient-to-br from-moss-50 via-white to-clay-100/70 p-0">
           <div className="space-y-4 p-7 sm:p-8">
@@ -114,7 +116,7 @@ export function PlanSummaryPageContent({ planId }: PlanSummaryPageContentProps) 
         </Card>
 
         <div className="flex flex-wrap gap-3 pt-1">
-          <Link href={`/plans/${plan.id}`} className={buttonClasses("secondary", "lg")}>
+          <Link href={detailPath} className={buttonClasses("secondary", "lg")}>
             返回计划档案
           </Link>
           <Link href="/" className={buttonClasses("primary", "lg")}>

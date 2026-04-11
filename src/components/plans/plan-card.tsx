@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Card, CardTitle } from "@/components/ui/card";
 import { Tag } from "@/components/ui/tag";
 import { buttonClasses } from "@/components/ui/button";
+import { getPlanDetailPath, getPlanNewRecordPath, getPlanSummaryPath } from "@/lib/plan-routes";
 import {
   type Plan,
   getLatestRecord,
@@ -13,13 +14,17 @@ import { ProgressBar } from "@/components/plans/progress-bar";
 type PlanCardProps = {
   plan: Plan;
   mode?: "active" | "completed";
+  isLocalPlan?: boolean;
 };
 
-export function PlanCard({ plan, mode }: PlanCardProps) {
+export function PlanCard({ plan, mode, isLocalPlan = false }: PlanCardProps) {
   const latestRecord = getLatestRecord(plan);
   const percent = getProgressPercent(plan);
   const resolvedMode = mode ?? (plan.status === "completed" ? "completed" : "active");
   const completionDate = getPlanCompletionDate(plan);
+  const detailPath = getPlanDetailPath(plan.id, isLocalPlan);
+  const newRecordPath = getPlanNewRecordPath(plan.id, isLocalPlan);
+  const summaryPath = getPlanSummaryPath(plan.id, isLocalPlan);
 
   if (resolvedMode === "completed") {
     return (
@@ -39,10 +44,10 @@ export function PlanCard({ plan, mode }: PlanCardProps) {
         </div>
 
         <div className="flex flex-wrap gap-2">
-          <Link href={`/plans/${plan.id}/summary`} className={buttonClasses("primary", "md")}>
+          <Link href={summaryPath} className={buttonClasses("primary", "md")}>
             查看阶段总结
           </Link>
-          <Link href={`/plans/${plan.id}`} className={buttonClasses("ghost", "md")}>
+          <Link href={detailPath} className={buttonClasses("ghost", "md")}>
             打开成长档案
           </Link>
         </div>
@@ -78,10 +83,10 @@ export function PlanCard({ plan, mode }: PlanCardProps) {
       </article>
 
       <div className="flex flex-wrap gap-2">
-        <Link href={`/plans/${plan.id}/records/new`} className={buttonClasses("primary", "md")}>
+        <Link href={newRecordPath} className={buttonClasses("primary", "md")}>
           继续记录
         </Link>
-        <Link href={`/plans/${plan.id}`} className={buttonClasses("secondary", "md")}>
+        <Link href={detailPath} className={buttonClasses("secondary", "md")}>
           查看档案
         </Link>
       </div>

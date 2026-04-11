@@ -39,10 +39,14 @@ export function getLocalPlanById(planId: string): Plan | undefined {
 }
 
 export function saveLocalPlan(plan: SaveLocalPlanInput): Plan {
-  const fallbackId = `local-plan-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+  const generatedSuffix =
+    typeof crypto !== "undefined" && "randomUUID" in crypto
+      ? crypto.randomUUID()
+      : `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+  const fallbackId = `local-plan-${generatedSuffix}`;
   const nextPlan: Plan = {
     ...plan,
-    id: plan.id ?? (typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : fallbackId)
+    id: plan.id ?? fallbackId
   };
 
   const existing = readLocalPlansFromStorage();

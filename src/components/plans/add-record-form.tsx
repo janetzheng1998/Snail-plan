@@ -13,10 +13,12 @@ import { recordUnits } from "@/lib/mock-data";
 type AddRecordFormProps = {
   planId: string;
   planTitle: string;
+  planDetailPath?: string;
 };
 
-export function AddRecordForm({ planId, planTitle }: AddRecordFormProps) {
+export function AddRecordForm({ planId, planTitle, planDetailPath }: AddRecordFormProps) {
   const router = useRouter();
+  const resolvedPlanDetailPath = planDetailPath ?? `/plans/${planId}`;
   const [rawInput, setRawInput] = useState("");
   const [durationValue, setDurationValue] = useState(60);
   const [durationUnit, setDurationUnit] = useState<(typeof recordUnits)[number]>("分钟");
@@ -84,10 +86,11 @@ export function AddRecordForm({ planId, planTitle }: AddRecordFormProps) {
       setSaveError("");
       setSaved(true);
       setTimeout(() => {
-        const nextPath = `/plans/${planId}?saved=1`;
+        const nextPath = `${resolvedPlanDetailPath}${resolvedPlanDetailPath.includes("?") ? "&" : "?"}saved=1`;
         router.push(nextPath);
         window.setTimeout(() => {
-          if (window.location.pathname !== `/plans/${planId}`) {
+          const currentRelativePath = `${window.location.pathname}${window.location.search}`;
+          if (currentRelativePath !== nextPath) {
             window.location.assign(nextPath);
           }
         }, 700);
@@ -146,7 +149,7 @@ export function AddRecordForm({ planId, planTitle }: AddRecordFormProps) {
           <Button type="button" onClick={onOrganize}>
             AI 整理本次记录
           </Button>
-          <Link href={`/plans/${planId}`} className={buttonClasses("ghost", "md")}>
+          <Link href={resolvedPlanDetailPath} className={buttonClasses("ghost", "md")}>
             返回计划详情
           </Link>
         </div>

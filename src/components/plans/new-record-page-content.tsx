@@ -6,13 +6,14 @@ import { useResolvedPlan } from "@/components/plans/use-resolved-plan";
 import { PageShell } from "@/components/page-shell";
 import { buttonClasses } from "@/components/ui/button";
 import { Card, CardTitle } from "@/components/ui/card";
+import { getPlanDetailPath } from "@/lib/plan-routes";
 
 type NewRecordPageContentProps = {
   planId: string;
 };
 
 export function NewRecordPageContent({ planId }: NewRecordPageContentProps) {
-  const { plan, loading } = useResolvedPlan(planId);
+  const { plan, loading, isLocalPlan } = useResolvedPlan(planId);
 
   if (loading) {
     return (
@@ -44,8 +45,12 @@ export function NewRecordPageContent({ planId }: NewRecordPageContentProps) {
   }
 
   return (
-    <PageShell currentPath={`/plans/${plan.id}`}>
-      <AddRecordForm planId={plan.id} planTitle={plan.title} />
+    <PageShell currentPath={getPlanDetailPath(plan.id, isLocalPlan)}>
+      <AddRecordForm
+        planId={plan.id}
+        planTitle={plan.title}
+        planDetailPath={getPlanDetailPath(plan.id, isLocalPlan)}
+      />
     </PageShell>
   );
 }
