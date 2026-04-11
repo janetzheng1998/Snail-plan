@@ -1,11 +1,12 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { PageShell } from "@/components/page-shell";
+import { PlanDetailRecords } from "@/components/plans/plan-detail-records";
 import { ProgressBar } from "@/components/plans/progress-bar";
 import { buttonClasses } from "@/components/ui/button";
 import { Card, CardTitle } from "@/components/ui/card";
 import { Tag } from "@/components/ui/tag";
-import { getLatestRecord, getPlanById, getProgressPercent } from "@/lib/mock-data";
+import { getPlanById, getProgressPercent } from "@/lib/mock-data";
 
 type PlanDetailPageProps = {
   params: Promise<{ planId: string }>;
@@ -32,7 +33,6 @@ export default async function PlanDetailPage({
 
   const percent = getProgressPercent(plan);
   const isCompleted = plan.status === "completed";
-  const latestRecord = getLatestRecord(plan);
 
   return (
     <PageShell currentPath={`/plans/${plan.id}`}>
@@ -67,27 +67,7 @@ export default async function PlanDetailPage({
           </div>
         </Card>
 
-        <Card className="space-y-4 bg-white/74">
-          <CardTitle className="text-xl">档案速览</CardTitle>
-          <div className="space-y-2 text-sm text-ink-900/78">
-            <p>开始时间：{plan.started_at}</p>
-            <p>最近更新：{plan.updated_at}</p>
-            <p>累计记录：{plan.records.length} 条</p>
-            <p>计量方式：{plan.progress_unit}</p>
-          </div>
-
-          <div className="rounded-2xl border border-moss-100 bg-moss-50/70 p-3">
-            <p className="text-xs uppercase tracking-[0.14em] text-ink-900/50">最新片段</p>
-            <p className="mt-1 text-sm font-medium text-ink-900/86">{latestRecord?.date ?? "暂无"}</p>
-            <p className="mt-1 text-sm leading-6 text-ink-900/75">
-              {latestRecord?.organized.completed_content ?? "你的第一条成长记录将在这里出现。"}
-            </p>
-          </div>
-
-          <Link href="/" className="text-sm text-moss-700 underline-offset-4 hover:underline">
-            返回成长主页
-          </Link>
-        </Card>
+        <PlanDetailRecords plan={plan} />
       </section>
 
       <section className="mt-8">

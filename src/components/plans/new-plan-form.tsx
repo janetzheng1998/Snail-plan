@@ -27,10 +27,19 @@ export function NewPlanForm() {
   }, [isFlexiblePlan, planCycle, planName, targetValue, unit]);
 
   const onCreate = () => {
+    const nextPath = "/plans/voice-lesson-10/records/new";
     setCreated(true);
+
     setTimeout(() => {
-      router.push("/plans/voice-lesson-10");
-    }, 550);
+      router.push(nextPath);
+
+      // Netlify 某些静态部署场景下可能出现客户端路由未生效，补一个硬跳转兜底。
+      window.setTimeout(() => {
+        if (window.location.pathname === "/plans/new") {
+          window.location.assign(nextPath);
+        }
+      }, 650);
+    }, 240);
   };
 
   return (
@@ -147,7 +156,7 @@ export function NewPlanForm() {
         </div>
 
         {created ? (
-          <p className="text-sm text-moss-700">已为你生成计划草稿，马上带你进入计划档案页。</p>
+          <p className="text-sm text-moss-700">已为你生成计划草稿，正在进入记录页。</p>
         ) : null}
       </Card>
     </div>

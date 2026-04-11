@@ -7,6 +7,7 @@ import { Button, buttonClasses } from "@/components/ui/button";
 import { Card, CardText, CardTitle } from "@/components/ui/card";
 import { Tag } from "@/components/ui/tag";
 import { TextArea } from "@/components/ui/text-area";
+import { getLocalRecordsByPlanId, saveLocalRecord } from "@/lib/local-records";
 import { mockOrganizedRecord, recordUnits } from "@/lib/mock-data";
 
 type AddRecordFormProps = {
@@ -21,6 +22,7 @@ export function AddRecordForm({ planId, planTitle }: AddRecordFormProps) {
   const [durationUnit, setDurationUnit] = useState<(typeof recordUnits)[number]>("分钟");
   const [generated, setGenerated] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [saveError, setSaveError] = useState("");
 
   const onOrganize = () => {
     if (!rawInput.trim()) {
@@ -32,10 +34,48 @@ export function AddRecordForm({ planId, planTitle }: AddRecordFormProps) {
   };
 
   const onSave = () => {
-    setSaved(true);
-    setTimeout(() => {
-      router.push(`/plans/${planId}?saved=1`);
-    }, 600);
+    const fallbackRawText =
+      "今天训练了 60 分钟，前半段进入状态慢，中段有分心，但后面通过分解练习把核心问题找出来了。";
+    const now = new Date();
+    const localDate = new Date(now.getTime() - now.getTimezoneOffset() * 60000)
+      .toISOString()
+      .slice(0, 10);
+
+    try {
+      const savedRecord = saveLocalRecord({
+        planId,
+        date: localDate,
+        rawText: rawInput.trim() || fallbackRawText,
+        durationValue,
+        durationUnit,
+        organized: {
+          summary: `完成 ${durationValue}${durationUnit} 的训练，已沉淀本次收获与下一步动作。`,
+          completedContent: mockOrganizedRecord.completed_content,
+          issues: mockOrganizedRecord.problems,
+          nextActions: mockOrganizedRecord.next_suggestions
+        }
+      });
+      const savedInStorage = getLocalRecordsByPlanId(planId).some((item) => item.id === savedRecord.id);
+
+      if (!savedInStorage) {
+        throw new Error("Local storage write verification failed");
+      }
+
+      setSaveError("");
+      setSaved(true);
+      setTimeout(() => {
+        const nextPath = `/plans/${planId}?saved=1`;
+        router.push(nextPath);
+        window.setTimeout(() => {
+          if (window.location.pathname !== `/plans/${planId}`) {
+            window.location.assign(nextPath);
+          }
+        }, 700);
+      }, 600);
+    } catch {
+      setSaved(false);
+      setSaveError("保存失败：浏览器本地存储不可用或写入失败，请检查无痕模式/隐私设置后重试。");
+    }
   };
 
   return (
@@ -124,14 +164,15 @@ export function AddRecordForm({ planId, planTitle }: AddRecordFormProps) {
             </div>
 
             <Button type="button" onClick={onSave}>
-              保存本次记录（Mock）
+              保存记录
             </Button>
           </div>
         ) : (
           <CardText>点击“AI 整理本次记录”后，这里会展示结构化结果。</CardText>
         )}
 
-        {saved ? <p className="text-sm text-moss-700">已模拟保存，正在返回计划详情...</p> : null}
+        {saved ? <p className="text-sm text-moss-700">已保存，正在返回计划详情...</p> : null}
+        {saveError ? <p className="text-sm text-red-600">{saveError}</p> : null}
       </Card>
     </div>
   );
