@@ -1,14 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button, buttonClasses } from "@/components/ui/button";
 import { Card, CardText, CardTitle } from "@/components/ui/card";
 import { Tag } from "@/components/ui/tag";
 import { TextArea } from "@/components/ui/text-area";
 import { getLocalRecordsByPlanId, saveLocalRecord } from "@/lib/local-records";
-import { mockOrganizedRecord, recordUnits } from "@/lib/mock-data";
+import { recordUnits } from "@/lib/mock-data";
 
 type AddRecordFormProps = {
   planId: string;
@@ -23,19 +23,44 @@ export function AddRecordForm({ planId, planTitle }: AddRecordFormProps) {
   const [generated, setGenerated] = useState(false);
   const [saved, setSaved] = useState(false);
   const [saveError, setSaveError] = useState("");
+  const fallbackRawText =
+    "今天训练了 60 分钟，前半段进入状态慢，中段有分心，但后面通过分解练习把核心问题找出来了。";
+  const normalizedRawInput = rawInput.trim() || fallbackRawText;
+
+  const organizedPreview = useMemo(() => {
+    const sentences = normalizedRawInput
+      .replace(/\s+/g, " ")
+      .split(/[。！？!?]/)
+      .map((item) => item.trim())
+      .filter(Boolean);
+
+    const shortText =
+      normalizedRawInput.length > 44 ? `${normalizedRawInput.slice(0, 44)}...` : normalizedRawInput;
+    const issueSentence = sentences.find((item) => /(慢|卡|分心|问题|不足|紧张|疲劳|不稳)/.test(item));
+
+    return {
+      summary: `完成 ${durationValue}${durationUnit} 的记录，核心片段：${shortText}`,
+      completedContent: `完成 ${durationValue}${durationUnit} 的训练/学习，重点记录：${shortText}`,
+      issues: issueSentence
+        ? [issueSentence]
+        : ["本次记录未明确提到阻碍点，建议下次补充“最卡的一步”。"],
+      nextActions: [
+        `下次开始前先设定本次唯一目标，预计投入 ${durationValue}${durationUnit}。`,
+        issueSentence
+          ? `围绕“${issueSentence.slice(0, 16)}”做一次 10 分钟分解练习。`
+          : "结束后立刻写下 3 行复盘：完成了什么、卡在哪里、下一步做什么。"
+      ]
+    };
+  }, [durationUnit, durationValue, normalizedRawInput]);
 
   const onOrganize = () => {
     if (!rawInput.trim()) {
-      setRawInput(
-        "今天训练了 60 分钟，前半段进入状态慢，中段有分心，但后面通过分解练习把核心问题找出来了。"
-      );
+      setRawInput(fallbackRawText);
     }
     setGenerated(true);
   };
 
   const onSave = () => {
-    const fallbackRawText =
-      "今天训练了 60 分钟，前半段进入状态慢，中段有分心，但后面通过分解练习把核心问题找出来了。";
     const now = new Date();
     const localDate = new Date(now.getTime() - now.getTimezoneOffset() * 60000)
       .toISOString()
@@ -48,12 +73,7 @@ export function AddRecordForm({ planId, planTitle }: AddRecordFormProps) {
         rawText: rawInput.trim() || fallbackRawText,
         durationValue,
         durationUnit,
-        organized: {
-          summary: `完成 ${durationValue}${durationUnit} 的训练，已沉淀本次收获与下一步动作。`,
-          completedContent: mockOrganizedRecord.completed_content,
-          issues: mockOrganizedRecord.problems,
-          nextActions: mockOrganizedRecord.next_suggestions
-        }
+        organized: organizedPreview
       });
       const savedInStorage = getLocalRecordsByPlanId(planId).some((item) => item.id === savedRecord.id);
 
@@ -133,18 +153,18 @@ export function AddRecordForm({ planId, planTitle }: AddRecordFormProps) {
       </Card>
 
       <Card className="space-y-4">
-        <CardTitle className="text-xl">AI 整理结果（Mock）</CardTitle>
+        <CardTitle className="text-xl">AI 整理结果（本地规则）</CardTitle>
 
         {generated ? (
           <div className="space-y-4 text-sm leading-7 text-ink-900/85">
             <div>
               <p className="font-medium">本次完成内容</p>
-              <CardText>{mockOrganizedRecord.completed_content}</CardText>
+              <CardText>{organizedPreview.completedContent}</CardText>
             </div>
             <div>
               <p className="font-medium">暴露问题</p>
               <ul className="list-disc space-y-1 pl-5">
-                {mockOrganizedRecord.problems.map((issue) => (
+                {organizedPreview.issues.map((issue) => (
                   <li key={issue}>{issue}</li>
                 ))}
               </ul>
@@ -152,7 +172,7 @@ export function AddRecordForm({ planId, planTitle }: AddRecordFormProps) {
             <div>
               <p className="font-medium">下一步建议</p>
               <ul className="list-disc space-y-1 pl-5">
-                {mockOrganizedRecord.next_suggestions.map((item) => (
+                {organizedPreview.nextActions.map((item) => (
                   <li key={item}>{item}</li>
                 ))}
               </ul>

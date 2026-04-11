@@ -41,6 +41,7 @@ export function PlanDetailRecords({ plan }: PlanDetailRecordsProps) {
   }, [localRecords, plan.records]);
 
   const latestRecord = mergedRecords[0];
+  const mockRecordIdSet = useMemo(() => new Set(plan.records.map((record) => record.id)), [plan.records]);
 
   return (
     <Card className="space-y-4 bg-white/74">
@@ -66,9 +67,20 @@ export function PlanDetailRecords({ plan }: PlanDetailRecordsProps) {
           <ul className="space-y-2">
             {mergedRecords.slice(0, 4).map((record) => (
               <li key={record.id} className="rounded-xl border border-moss-100 bg-moss-50/60 p-2">
-                <p className="text-xs text-ink-900/58">{record.date}</p>
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-xs text-ink-900/58">{record.date}</p>
+                  {!mockRecordIdSet.has(record.id) ? (
+                    <span className="rounded-full border border-moss-300 bg-white px-2 py-0.5 text-[11px] text-moss-700">
+                      本地新增
+                    </span>
+                  ) : null}
+                </div>
                 <p className="mt-1 text-sm leading-6 text-ink-900/82">
                   {record.organized.completed_content}
+                </p>
+                <p className="mt-1 text-xs leading-5 text-ink-900/62">
+                  原始记录：
+                  {record.raw_text.length > 34 ? `${record.raw_text.slice(0, 34)}...` : record.raw_text}
                 </p>
               </li>
             ))}
