@@ -87,7 +87,7 @@ export function PlanDetailPageContent({ planId }: PlanDetailPageContentProps) {
       <section className="mt-8">
         <Card className="flex flex-wrap items-center justify-between gap-3 bg-white/75">
           <h3 className="text-xl text-ink-900">成长日历</h3>
-          <Link href="/calendar" className={buttonClasses("secondary", "md")}>
+          <Link href={`/calendar?planId=${encodeURIComponent(plan.id)}`} className={buttonClasses("secondary", "md")}>
             打开日历
           </Link>
         </Card>
