@@ -1,82 +1,171 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useMemo, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Button, buttonClasses } from "@/components/ui/button";
 import { Card, CardTitle } from "@/components/ui/card";
-import { saveLocalPlan } from "@/lib/local-plans";
+import { getLocalPlanById, saveLocalPlan } from "@/lib/local-plans";
+import { getPlanById, planCategories, progressUnits, type Plan, type PlanStatus } from "@/lib/mock-data";
 import { getPlanNewRecordPath } from "@/lib/plan-routes";
-import { planCategories, progressUnits } from "@/lib/mock-data";
 import { cn } from "@/lib/utils";
+
+const DEFAULT_PLAN_NAME = "声乐课学习（10节）";
+const DEFAULT_PLAN_CYCLE = "未来 10 周";
+const DEFAULT_DESCRIPTION = "开始记录吧";
+
+function getLocalDateString(): string {
+  const now = new Date();
+  return new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+}
+
+function splitDescriptionAndCycle(rawDescription: string): { description: string; cycle: string } {
+  const lines = rawDescription.split("\n");
+  const cycleLineIndex = lines.findIndex((line) => line.trim().startsWith("周期："));
+
+  if (cycleLineIndex < 0) {
+    return { description: rawDescription, cycle: "" };
+  }
+
+  const cycle = lines[cycleLineIndex].trim().replace(/^周期：/, "").trim();
+  const description = lines.filter((_, index) => index !== cycleLineIndex).join("\n").trim();
+
+  return {
+    description: description || DEFAULT_DESCRIPTION,
+    cycle
+  };
+}
+
+function composeDescriptionWithCycle(description: string, cycle: string): string {
+  const normalizedDescription = description.trim() || DEFAULT_DESCRIPTION;
+  const normalizedCycle = cycle.trim();
+
+  return normalizedCycle
+    ? `${normalizedDescription}\n周期：${normalizedCycle}`
+    : normalizedDescription;
+}
 
 export function NewPlanForm() {
   const router = useRouter();
-  const [planName, setPlanName] = useState("声乐课学习（10节）");
-  const [planCycle, setPlanCycle] = useState("未来 10 周");
+  const searchParams = useSearchParams();
+  const editingPlanId = (searchParams.get("planId") ?? "").trim();
+
+  const [planName, setPlanName] = useState(DEFAULT_PLAN_NAME);
+  const [planCycle, setPlanCycle] = useState(DEFAULT_PLAN_CYCLE);
   const [category, setCategory] = useState<(typeof planCategories)[number]>("学习提升");
   const [targetValue, setTargetValue] = useState<number>(10);
   const [unit, setUnit] = useState<(typeof progressUnits)[number]>("次");
-  const [description, setDescription] = useState(
-    "开始记录吧"
-  );
-  const [created, setCreated] = useState(false);
+  const [description, setDescription] = useState(DEFAULT_DESCRIPTION);
+  const [statusHint, setStatusHint] = useState("");
+  const [resolvedEditingPlan, setResolvedEditingPlan] = useState<Plan>();
   const isFlexiblePlan = unit === "不定时";
+  const isEditMode = Boolean(resolvedEditingPlan);
+
+  useEffect(() => {
+    if (!editingPlanId) {
+      setResolvedEditingPlan(undefined);
+      setPlanName(DEFAULT_PLAN_NAME);
+      setPlanCycle(DEFAULT_PLAN_CYCLE);
+      setCategory("学习提升");
+      setTargetValue(10);
+      setUnit("次");
+      setDescription(DEFAULT_DESCRIPTION);
+      setStatusHint("");
+      return;
+    }
+
+    const plan = getLocalPlanById(editingPlanId) ?? getPlanById(editingPlanId);
+
+    if (!plan) {
+      setResolvedEditingPlan(undefined);
+      setStatusHint("未找到要编辑的计划，已切换为新建模式。");
+      return;
+    }
+
+    const { description: parsedDescription, cycle } = splitDescriptionAndCycle(plan.description);
+
+    setResolvedEditingPlan(plan);
+    setPlanName(plan.title);
+    setPlanCycle(cycle || DEFAULT_PLAN_CYCLE);
+    setCategory(plan.category);
+    setTargetValue(Math.max(1, plan.target_value));
+    setUnit(plan.progress_unit);
+    setDescription(parsedDescription);
+    setStatusHint("");
+  }, [editingPlanId]);
 
   const previewText = useMemo(() => {
     const goalText = isFlexiblePlan ? "不定时" : `${targetValue}${unit}`;
     return `${planName} · 目标 ${goalText} · 周期 ${planCycle}`;
   }, [isFlexiblePlan, planCycle, planName, targetValue, unit]);
 
-  const onCreate = () => {
-    const now = new Date();
-    const localDate = new Date(now.getTime() - now.getTimezoneOffset() * 60000)
-      .toISOString()
-      .slice(0, 10);
-    const normalizedName = planName.trim() || "未命名计划";
-    const normalizedDescription = description.trim() || "开始记录吧";
-    const normalizedCycle = planCycle.trim();
-    const nextPlan = saveLocalPlan({
-      title: normalizedName,
+  const persistPlan = (status: PlanStatus): Plan => {
+    const localDate = getLocalDateString();
+    const fallbackPlan = resolvedEditingPlan;
+
+    return saveLocalPlan({
+      id: fallbackPlan?.id,
+      title: planName.trim() || "未命名计划",
       category,
-      description: normalizedCycle
-        ? `${normalizedDescription}\n周期：${normalizedCycle}`
-        : normalizedDescription,
-      status: "active",
-      started_at: localDate,
+      description: composeDescriptionWithCycle(description, planCycle),
+      status,
+      started_at: fallbackPlan?.started_at ?? localDate,
       updated_at: localDate,
+      completed_at: status === "completed" ? localDate : undefined,
       target_value: isFlexiblePlan ? 1 : Math.max(1, targetValue),
-      current_value: 0,
+      current_value: fallbackPlan?.current_value ?? 0,
       progress_unit: unit,
-      records: []
+      records: fallbackPlan?.records ?? []
     });
+  };
+
+  const navigateWithFallback = (nextPath: string) => {
+    router.push(nextPath);
+
+    window.setTimeout(() => {
+      const currentPath = `${window.location.pathname}${window.location.search}`;
+      if (currentPath !== nextPath) {
+        window.location.assign(nextPath);
+      }
+    }, 700);
+  };
+
+  const onSaveDraft = () => {
+    persistPlan("draft");
+    setStatusHint(isEditMode ? "草稿已更新，正在返回我的计划..." : "草稿已保存，正在返回我的计划...");
+
+    window.setTimeout(() => {
+      navigateWithFallback("/plans");
+    }, 220);
+  };
+
+  const onCreateAndContinue = () => {
+    const nextPlan = persistPlan("active");
     const nextPath = getPlanNewRecordPath(nextPlan.id, true);
 
-    setCreated(true);
+    setStatusHint(
+      isEditMode ? "计划已更新，正在进入记录页..." : "计划已创建，正在进入记录页..."
+    );
 
-    setTimeout(() => {
-      router.push(nextPath);
-
-      // Netlify 某些静态部署场景下可能出现客户端路由未生效，补一个硬跳转兜底。
-      window.setTimeout(() => {
-        if (window.location.pathname === "/plans/new") {
-          window.location.assign(nextPath);
-        }
-      }, 650);
-    }, 240);
+    window.setTimeout(() => {
+      navigateWithFallback(nextPath);
+    }, 220);
   };
 
   return (
     <div className="space-y-6">
       <Card className="space-y-6 bg-white/78">
         <div className="space-y-2">
-          <CardTitle className="text-xl">计划名称</CardTitle>
-          <input
-            value={planName}
-            onChange={(event) => setPlanName(event.target.value)}
-            placeholder="例如：声乐课学习（10节）"
-            className="h-12 w-full rounded-2xl border border-white bg-white/92 px-4 text-base text-ink-900 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-moss-300"
-          />
+          <CardTitle className="text-xl">{isEditMode ? "编辑计划" : "创建新计划"}</CardTitle>
+          <label className="space-y-2">
+            <span className="text-sm font-medium text-ink-900/84">计划名称</span>
+            <input
+              value={planName}
+              onChange={(event) => setPlanName(event.target.value)}
+              placeholder="例如：声乐课学习（10节）"
+              className="h-12 w-full rounded-2xl border border-white bg-white/92 px-4 text-base text-ink-900 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-moss-300"
+            />
+          </label>
         </div>
 
         <div className="grid gap-5 md:grid-cols-2">
@@ -171,17 +260,18 @@ export function NewPlanForm() {
         </div>
 
         <div className="flex flex-wrap gap-3">
-          <Button type="button" size="lg" onClick={onCreate}>
-            创建并开始记录
+          <Button type="button" size="lg" variant="secondary" onClick={onSaveDraft}>
+            {isEditMode ? "更新草稿" : "保存草稿"}
+          </Button>
+          <Button type="button" size="lg" onClick={onCreateAndContinue}>
+            {isEditMode ? "更新并继续" : "创建并开始记录"}
           </Button>
           <Link href="/" className={buttonClasses("ghost", "lg")}>
             回到成长主页
           </Link>
         </div>
 
-        {created ? (
-          <p className="text-sm text-moss-700">已为你生成计划草稿，正在进入记录页。</p>
-        ) : null}
+        {statusHint ? <p className="text-sm text-moss-700">{statusHint}</p> : null}
       </Card>
     </div>
   );

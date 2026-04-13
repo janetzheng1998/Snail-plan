@@ -1,4 +1,4 @@
-export type PlanStatus = "active" | "completed";
+export type PlanStatus = "active" | "completed" | "draft";
 export type ProgressUnit = "次" | "天" | "小时" | "不定时";
 export type RecordUnit = "分钟" | "次" | "天" | "小时";
 

@@ -38,6 +38,11 @@ export function getLocalPlanById(planId: string): Plan | undefined {
   return readLocalPlansFromStorage().find((plan) => plan.id === planId);
 }
 
+export function deleteLocalPlan(planId: string): void {
+  const filtered = readLocalPlansFromStorage().filter((plan) => plan.id !== planId);
+  writeLocalPlansToStorage(filtered);
+}
+
 export function saveLocalPlan(plan: SaveLocalPlanInput): Plan {
   const generatedSuffix =
     typeof crypto !== "undefined" && "randomUUID" in crypto

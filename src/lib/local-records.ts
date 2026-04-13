@@ -56,6 +56,11 @@ export function getLocalRecordsByPlanId(planId: string): LocalRecord[] {
   return readLocalRecordsFromStorage().filter((record) => record.planId === planId);
 }
 
+export function deleteLocalRecordsByPlanId(planId: string): void {
+  const filtered = readLocalRecordsFromStorage().filter((record) => record.planId !== planId);
+  writeLocalRecordsToStorage(filtered);
+}
+
 export function saveLocalRecord(record: SaveLocalRecordInput): LocalRecord {
   const fallbackId = `local-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
   const nextRecord: LocalRecord = {

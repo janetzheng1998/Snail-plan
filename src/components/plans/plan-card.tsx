@@ -2,7 +2,12 @@ import Link from "next/link";
 import { Card, CardTitle } from "@/components/ui/card";
 import { Tag } from "@/components/ui/tag";
 import { buttonClasses } from "@/components/ui/button";
-import { getPlanDetailPath, getPlanNewRecordPath, getPlanSummaryPath } from "@/lib/plan-routes";
+import {
+  getPlanDetailPath,
+  getPlanEditPath,
+  getPlanNewRecordPath,
+  getPlanSummaryPath
+} from "@/lib/plan-routes";
 import {
   type Plan,
   getLatestRecord,
@@ -15,9 +20,10 @@ type PlanCardProps = {
   plan: Plan;
   mode?: "active" | "completed";
   isLocalPlan?: boolean;
+  onDeletePlan?: (plan: Plan, isLocalPlan: boolean) => void;
 };
 
-export function PlanCard({ plan, mode, isLocalPlan = false }: PlanCardProps) {
+export function PlanCard({ plan, mode, isLocalPlan = false, onDeletePlan }: PlanCardProps) {
   const latestRecord = getLatestRecord(plan);
   const percent = getProgressPercent(plan);
   const resolvedMode = mode ?? (plan.status === "completed" ? "completed" : "active");
@@ -25,6 +31,8 @@ export function PlanCard({ plan, mode, isLocalPlan = false }: PlanCardProps) {
   const detailPath = getPlanDetailPath(plan.id, isLocalPlan);
   const newRecordPath = getPlanNewRecordPath(plan.id, isLocalPlan);
   const summaryPath = getPlanSummaryPath(plan.id, isLocalPlan);
+  const editPath = getPlanEditPath(plan.id);
+  const showDraftTag = plan.status === "draft";
 
   if (resolvedMode === "completed") {
     return (
@@ -32,6 +40,7 @@ export function PlanCard({ plan, mode, isLocalPlan = false }: PlanCardProps) {
         <div className="flex flex-wrap items-center gap-2">
           <Tag className="border-clay-500 bg-clay-100 text-clay-500">已完成</Tag>
           <Tag>{plan.category}</Tag>
+          {showDraftTag ? <Tag className="border-moss-300 bg-moss-50 text-moss-700">草稿</Tag> : null}
         </div>
 
         <div className="space-y-1">
@@ -51,6 +60,19 @@ export function PlanCard({ plan, mode, isLocalPlan = false }: PlanCardProps) {
             打开成长档案
           </Link>
         </div>
+
+        <div className="flex flex-wrap gap-2">
+          <Link href={editPath} className={buttonClasses("secondary", "md")}>
+            编辑
+          </Link>
+          <button
+            type="button"
+            onClick={() => onDeletePlan?.(plan, isLocalPlan)}
+            className={buttonClasses("ghost", "md")}
+          >
+            删除
+          </button>
+        </div>
       </Card>
     );
   }
@@ -59,7 +81,9 @@ export function PlanCard({ plan, mode, isLocalPlan = false }: PlanCardProps) {
     <Card className="space-y-5 border-moss-100 bg-gradient-to-br from-white to-moss-50/80">
       <div className="flex flex-wrap items-center gap-2">
         <Tag>{plan.category}</Tag>
-        <Tag className="border-moss-600 bg-moss-100 text-moss-700">进行中</Tag>
+        <Tag className={showDraftTag ? "border-moss-300 bg-moss-50 text-moss-700" : "border-moss-600 bg-moss-100 text-moss-700"}>
+          {showDraftTag ? "草稿" : "进行中"}
+        </Tag>
       </div>
 
       <div className="space-y-1">
@@ -89,6 +113,16 @@ export function PlanCard({ plan, mode, isLocalPlan = false }: PlanCardProps) {
         <Link href={detailPath} className={buttonClasses("secondary", "md")}>
           查看档案
         </Link>
+        <Link href={editPath} className={buttonClasses("ghost", "md")}>
+          编辑
+        </Link>
+        <button
+          type="button"
+          onClick={() => onDeletePlan?.(plan, isLocalPlan)}
+          className={buttonClasses("ghost", "md")}
+        >
+          删除
+        </button>
       </div>
     </Card>
   );

@@ -3,6 +3,11 @@ function withPlanId(path: string, planId: string): string {
   return `${path}?${params.toString()}`;
 }
 
+export function getPlanEditPath(planId: string): string {
+  const params = new URLSearchParams({ planId });
+  return `/plans/new?${params.toString()}`;
+}
+
 export function getPlanDetailPath(planId: string, isLocalPlan: boolean): string {
   return isLocalPlan ? withPlanId("/plans/local", planId) : `/plans/${planId}`;
 }
