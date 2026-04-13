@@ -10,9 +10,9 @@ import { getPlanById, planCategories, progressUnits, type Plan, type PlanStatus 
 import { getPlanNewRecordPath } from "@/lib/plan-routes";
 import { cn } from "@/lib/utils";
 
-const DEFAULT_PLAN_NAME = "声乐课学习（10节）";
-const DEFAULT_PLAN_CYCLE = "未来 10 周";
-const DEFAULT_DESCRIPTION = "开始记录吧";
+const DEFAULT_PLAN_NAME = "";
+const DEFAULT_PLAN_CYCLE = "";
+const DEFAULT_DESCRIPTION = "";
 
 function getLocalDateString(): string {
   const now = new Date();
@@ -31,18 +31,28 @@ function splitDescriptionAndCycle(rawDescription: string): { description: string
   const description = lines.filter((_, index) => index !== cycleLineIndex).join("\n").trim();
 
   return {
-    description: description || DEFAULT_DESCRIPTION,
+    description,
     cycle
   };
 }
 
 function composeDescriptionWithCycle(description: string, cycle: string): string {
-  const normalizedDescription = description.trim() || DEFAULT_DESCRIPTION;
+  const normalizedDescription = description.trim();
   const normalizedCycle = cycle.trim();
 
-  return normalizedCycle
-    ? `${normalizedDescription}\n周期：${normalizedCycle}`
-    : normalizedDescription;
+  if (normalizedDescription && normalizedCycle) {
+    return `${normalizedDescription}\n周期：${normalizedCycle}`;
+  }
+
+  if (normalizedDescription) {
+    return normalizedDescription;
+  }
+
+  if (normalizedCycle) {
+    return `周期：${normalizedCycle}`;
+  }
+
+  return "";
 }
 
 export function NewPlanForm() {
@@ -96,7 +106,9 @@ export function NewPlanForm() {
 
   const previewText = useMemo(() => {
     const goalText = isFlexiblePlan ? "不定时" : `${targetValue}${unit}`;
-    return `${planName} · 目标 ${goalText} · 周期 ${planCycle}`;
+    const previewName = planName.trim() || "未命名计划";
+    const previewCycle = planCycle.trim() || "待填写";
+    return `${previewName} · 目标 ${goalText} · 周期 ${previewCycle}`;
   }, [isFlexiblePlan, planCycle, planName, targetValue, unit]);
 
   const persistPlan = (status: PlanStatus): Plan => {
@@ -249,6 +261,7 @@ export function NewPlanForm() {
           <textarea
             value={description}
             onChange={(event) => setDescription(event.target.value)}
+            placeholder="开始记录吧"
             className="min-h-24 w-full rounded-2xl border border-white bg-white/92 px-4 py-3 text-sm leading-6 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-moss-300"
           />
         </label>
