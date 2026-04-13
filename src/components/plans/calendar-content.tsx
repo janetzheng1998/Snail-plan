@@ -3,9 +3,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { RecordCalendar, type CalendarRecord } from "@/components/plans/record-calendar";
-import { getLocalPlans, mergePlansWithLocal } from "@/lib/local-plans";
+import { getLocalPlans } from "@/lib/local-plans";
 import { getLocalRecords, localRecordToPlanRecord, type LocalRecord } from "@/lib/local-records";
-import { plans, type Plan } from "@/lib/mock-data";
+import { type Plan } from "@/lib/mock-data";
 
 function mergeRecords(primary: CalendarRecord[], secondary: CalendarRecord[]): CalendarRecord[] {
   const map = new Map<string, CalendarRecord>();
@@ -43,12 +43,12 @@ export function CalendarContent() {
     };
   }, []);
 
-  const mergedPlans = useMemo(() => mergePlansWithLocal(plans, localPlans), [localPlans]);
+  const localPlanIdSet = useMemo(() => new Set(localPlans.map((plan) => plan.id)), [localPlans]);
 
   const recordsFromPlans = useMemo<CalendarRecord[]>(() => {
     const scopedPlans = scopedPlanId
-      ? mergedPlans.filter((plan) => plan.id === scopedPlanId)
-      : mergedPlans;
+      ? localPlans.filter((plan) => plan.id === scopedPlanId)
+      : localPlans;
 
     return scopedPlans.flatMap((plan) =>
       plan.records.map((record) => ({
@@ -58,15 +58,16 @@ export function CalendarContent() {
         planStatus: plan.status
       }))
     );
-  }, [mergedPlans, scopedPlanId]);
+  }, [localPlans, scopedPlanId]);
 
   const recordsFromLocalStorage = useMemo<CalendarRecord[]>(() => {
+    const existingPlanRecords = localRecords.filter((record) => localPlanIdSet.has(record.planId));
     const scopedLocalRecords = scopedPlanId
-      ? localRecords.filter((record) => record.planId === scopedPlanId)
-      : localRecords;
+      ? existingPlanRecords.filter((record) => record.planId === scopedPlanId)
+      : existingPlanRecords;
 
     return scopedLocalRecords.map((record) => {
-      const resolvedPlan = mergedPlans.find((plan) => plan.id === record.planId);
+      const resolvedPlan = localPlans.find((plan) => plan.id === record.planId);
 
       return {
         ...localRecordToPlanRecord(record),
@@ -76,7 +77,7 @@ export function CalendarContent() {
         summary: record.organized.summary
       };
     });
-  }, [localRecords, mergedPlans, scopedPlanId]);
+  }, [localPlanIdSet, localRecords, localPlans, scopedPlanId]);
 
   const records = useMemo(
     () => mergeRecords(recordsFromPlans, recordsFromLocalStorage),
