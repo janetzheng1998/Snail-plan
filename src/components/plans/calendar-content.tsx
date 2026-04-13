@@ -2,23 +2,25 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { RecordCalendar } from "@/components/plans/record-calendar";
+import { RecordCalendar, type CalendarRecord } from "@/components/plans/record-calendar";
 import { getLocalPlans, mergePlansWithLocal } from "@/lib/local-plans";
 import { getLocalRecords, localRecordToPlanRecord, type LocalRecord } from "@/lib/local-records";
-import { plans, type Plan, type PlanRecord } from "@/lib/mock-data";
+import { plans, type Plan } from "@/lib/mock-data";
 
-function mergeRecords(primary: PlanRecord[], secondary: PlanRecord[]): PlanRecord[] {
-  const map = new Map<string, PlanRecord>();
+function mergeRecords(primary: CalendarRecord[], secondary: CalendarRecord[]): CalendarRecord[] {
+  const map = new Map<string, CalendarRecord>();
 
   for (const record of primary) {
-    map.set(record.id, record);
+    map.set(`${record.planId}:${record.id}`, record);
   }
 
   for (const record of secondary) {
-    map.set(record.id, record);
+    map.set(`${record.planId}:${record.id}`, record);
   }
 
-  return [...map.values()].sort((a, b) => b.date.localeCompare(a.date));
+  return [...map.values()].sort(
+    (a, b) => b.date.localeCompare(a.date) || a.planTitle.localeCompare(b.planTitle, "zh-CN")
+  );
 }
 
 export function CalendarContent() {
@@ -43,20 +45,38 @@ export function CalendarContent() {
 
   const mergedPlans = useMemo(() => mergePlansWithLocal(plans, localPlans), [localPlans]);
 
-  const recordsFromPlans = useMemo(() => {
-    if (!scopedPlanId) {
-      return mergedPlans.flatMap((plan) => plan.records);
-    }
+  const recordsFromPlans = useMemo<CalendarRecord[]>(() => {
+    const scopedPlans = scopedPlanId
+      ? mergedPlans.filter((plan) => plan.id === scopedPlanId)
+      : mergedPlans;
 
-    return mergedPlans.find((plan) => plan.id === scopedPlanId)?.records ?? [];
+    return scopedPlans.flatMap((plan) =>
+      plan.records.map((record) => ({
+        ...record,
+        planId: plan.id,
+        planTitle: plan.title,
+        planStatus: plan.status
+      }))
+    );
   }, [mergedPlans, scopedPlanId]);
 
-  const recordsFromLocalStorage = useMemo(() => {
-    const scoped = scopedPlanId
+  const recordsFromLocalStorage = useMemo<CalendarRecord[]>(() => {
+    const scopedLocalRecords = scopedPlanId
       ? localRecords.filter((record) => record.planId === scopedPlanId)
       : localRecords;
-    return scoped.map(localRecordToPlanRecord);
-  }, [localRecords, scopedPlanId]);
+
+    return scopedLocalRecords.map((record) => {
+      const resolvedPlan = mergedPlans.find((plan) => plan.id === record.planId);
+
+      return {
+        ...localRecordToPlanRecord(record),
+        planId: record.planId,
+        planTitle: resolvedPlan?.title ?? "未命名计划",
+        planStatus: resolvedPlan?.status ?? "active",
+        summary: record.organized.summary
+      };
+    });
+  }, [localRecords, mergedPlans, scopedPlanId]);
 
   const records = useMemo(
     () => mergeRecords(recordsFromPlans, recordsFromLocalStorage),

@@ -1,13 +1,20 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Card, CardTitle } from "@/components/ui/card";
 import { Tag } from "@/components/ui/tag";
 import { cn } from "@/lib/utils";
-import { type PlanRecord } from "@/lib/mock-data";
+import { type PlanRecord, type PlanStatus } from "@/lib/mock-data";
+
+export type CalendarRecord = PlanRecord & {
+  planId: string;
+  planTitle: string;
+  planStatus: PlanStatus;
+  summary?: string;
+};
 
 type RecordCalendarProps = {
-  records: PlanRecord[];
+  records: CalendarRecord[];
 };
 
 type MonthOption = {
@@ -36,29 +43,13 @@ function formatDateKey(year: number, month: number, day: number): string {
   return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
 }
 
-function getRecordOrderMap(records: PlanRecord[]): Map<string, number> {
-  const sorted = [...records].sort((a, b) => a.date.localeCompare(b.date));
-  const map = new Map<string, number>();
-
-  sorted.forEach((record, index) => {
-    map.set(record.id, index + 1);
-  });
-
-  return map;
+function buildBriefSummary(record: CalendarRecord): string {
+  const source = record.summary?.trim() || record.organized.completed_content.trim() || record.raw_text.trim();
+  const normalized = source.replace(/\s+/g, " ");
+  return normalized.length > 40 ? `${normalized.slice(0, 40)}...` : normalized;
 }
 
-function buildDailySummary(record: PlanRecord): string {
-  const completedText = record.organized.completed_content.replace(/[。！!]+$/, "");
-  const firstIssue = record.organized.problems[0];
-
-  if (firstIssue) {
-    return `今天${completedText}，仍需继续关注：${firstIssue}。`;
-  }
-
-  return `今天${completedText}。`;
-}
-
-function getMonthOptions(records: PlanRecord[]): MonthOption[] {
+function getMonthOptions(records: CalendarRecord[]): MonthOption[] {
   const unique = new Set(records.map((record) => record.date.slice(0, 7)));
   const sorted = [...unique].sort((a, b) => b.localeCompare(a));
 
@@ -75,9 +66,40 @@ function getMonthOptions(records: PlanRecord[]): MonthOption[] {
   });
 }
 
+function formatDuration(record: CalendarRecord): string {
+  return `${record.duration_value}${record.duration_unit}`;
+}
+
+function getTotalDurationLabel(records: CalendarRecord[]): string {
+  const timeRecords = records.filter(
+    (record) => record.duration_unit === "分钟" || record.duration_unit === "小时"
+  );
+
+  if (timeRecords.length === 0) {
+    return "累计用时 暂无";
+  }
+
+  const minutes = timeRecords.reduce((sum, record) => {
+    return sum + record.duration_value * (record.duration_unit === "小时" ? 60 : 1);
+  }, 0);
+
+  if (minutes >= 60) {
+    const hours = (minutes / 60).toFixed(minutes % 60 === 0 ? 0 : 1);
+    return `累计用时 ${hours} 小时`;
+  }
+
+  return `累计用时 ${minutes} 分钟`;
+}
+
 export function RecordCalendar({ records }: RecordCalendarProps) {
   const monthOptions = useMemo(() => getMonthOptions(records), [records]);
   const [selectedMonthKey, setSelectedMonthKey] = useState<string>(monthOptions[0].key);
+
+  useEffect(() => {
+    if (!monthOptions.some((option) => option.key === selectedMonthKey)) {
+      setSelectedMonthKey(monthOptions[0].key);
+    }
+  }, [monthOptions, selectedMonthKey]);
 
   const selectedMonth = useMemo(() => {
     return monthOptions.find((option) => option.key === selectedMonthKey) ?? monthOptions[0];
@@ -86,11 +108,11 @@ export function RecordCalendar({ records }: RecordCalendarProps) {
   const recordsInMonth = useMemo(() => {
     return records
       .filter((record) => record.date.startsWith(selectedMonth.key))
-      .sort((a, b) => b.date.localeCompare(a.date));
+      .sort((a, b) => b.date.localeCompare(a.date) || a.planTitle.localeCompare(b.planTitle, "zh-CN"));
   }, [records, selectedMonth.key]);
 
   const recordsByDate = useMemo(() => {
-    const map = new Map<string, PlanRecord[]>();
+    const map = new Map<string, CalendarRecord[]>();
 
     recordsInMonth.forEach((record) => {
       const current = map.get(record.date) ?? [];
@@ -100,16 +122,35 @@ export function RecordCalendar({ records }: RecordCalendarProps) {
 
     return map;
   }, [recordsInMonth]);
-  const recordOrderMap = useMemo(() => getRecordOrderMap(records), [records]);
 
   const [selectedDate, setSelectedDate] = useState<string>(recordsInMonth[0]?.date ?? "");
+  const [showAllRecords, setShowAllRecords] = useState(false);
+
+  useEffect(() => {
+    if (!recordsInMonth.some((record) => record.date === selectedDate)) {
+      setSelectedDate(recordsInMonth[0]?.date ?? "");
+    }
+  }, [recordsInMonth, selectedDate]);
 
   const activeDate = selectedDate || recordsInMonth[0]?.date || "";
   const selectedRecords = activeDate ? recordsByDate.get(activeDate) ?? [] : [];
 
+  useEffect(() => {
+    setShowAllRecords(false);
+  }, [activeDate]);
+
+  const selectedPlanCount = useMemo(
+    () => new Set(selectedRecords.map((record) => record.planId)).size,
+    [selectedRecords]
+  );
+  const selectedTotalDurationLabel = useMemo(() => getTotalDurationLabel(selectedRecords), [selectedRecords]);
+  const visibleRecords = showAllRecords ? selectedRecords : selectedRecords.slice(0, 4);
+  const hasMoreRecords = selectedRecords.length > 4;
+
   const firstDay = new Date(selectedMonth.year, selectedMonth.month - 1, 1);
   const firstWeekday = (firstDay.getDay() + 6) % 7;
   const daysInMonth = new Date(selectedMonth.year, selectedMonth.month, 0).getDate();
+  const recordDaysInMonth = new Set(recordsInMonth.map((record) => record.date)).size;
 
   const cells: Array<number | null> = [
     ...Array.from({ length: firstWeekday }, () => null),
@@ -176,9 +217,10 @@ export function RecordCalendar({ records }: RecordCalendarProps) {
                   }
                 }}
                 className={cn(
-                  "flex h-10 items-center justify-center rounded-full text-sm",
+                  "flex h-10 items-center justify-center rounded-full text-sm transition",
                   hasRecord && "border-2 border-moss-700 bg-moss-700 text-white",
-                  !hasRecord && "border border-transparent text-ink-900/36"
+                  !hasRecord && "border border-transparent text-ink-900/36",
+                  isActive && "ring-2 ring-moss-300 ring-offset-2 ring-offset-transparent"
                 )}
                 aria-label={dateKey}
               >
@@ -189,64 +231,80 @@ export function RecordCalendar({ records }: RecordCalendarProps) {
         </div>
 
         <p className="text-sm text-ink-900/68">
-          本月已打卡 {recordsInMonth.length} 天，共 {recordsInMonth.length} 条记录。
+          本月已打卡 {recordDaysInMonth} 天，共 {recordsInMonth.length} 条记录。
         </p>
       </Card>
 
       <Card className="space-y-4 bg-white/74">
-        <CardTitle className="text-xl">当日记录</CardTitle>
+        <CardTitle className="text-xl">当日概览</CardTitle>
 
         {selectedRecords.length > 0 ? (
-          <div className="space-y-4">
+          <div className="space-y-3">
             <Tag className="border-moss-200 bg-moss-50 text-moss-700">
               {formatDateLabel(selectedRecords[0].date)}
             </Tag>
+            <p className="text-sm text-ink-900/72">
+              共记录 {selectedRecords.length} 条，{selectedTotalDurationLabel}，涉及 {selectedPlanCount} 个计划。
+            </p>
 
-            {selectedRecords.map((record) => (
-              <article key={record.id} className="space-y-4 rounded-2xl border border-moss-100 bg-white/78 p-4">
-                <div className="space-y-2">
-                  <p className="text-sm font-medium text-ink-900/84">
-                    第 {recordOrderMap.get(record.id) ?? "-"} 次记录 · {record.duration_value}
-                    {record.duration_unit}
-                  </p>
-                  <p className="text-sm leading-7 text-ink-900/76">{buildDailySummary(record)}</p>
-                </div>
+            <div className="space-y-3">
+              {visibleRecords.map((record) => (
+                <article key={record.id} className="rounded-2xl border border-moss-100 bg-white/80 p-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex min-w-0 items-center gap-2">
+                      <p className="truncate text-sm font-semibold text-ink-900">{record.planTitle}</p>
+                      <Tag className="border-moss-200 bg-moss-50 text-moss-700">
+                        {record.planStatus === "draft" ? "草稿" : "计划"}
+                      </Tag>
+                    </div>
+                    <p className="whitespace-nowrap text-xs font-medium text-ink-900/72">
+                      {formatDuration(record)}
+                    </p>
+                  </div>
 
-                <div className="space-y-4 text-sm leading-7 text-ink-900/82">
-                  <section className="border-t border-moss-100 pt-4">
-                    <h4 className="text-sm font-semibold text-ink-900">本次完成</h4>
-                    <p className="mt-1">{record.organized.completed_content}</p>
-                  </section>
+                  <p className="mt-2 text-sm leading-6 text-ink-900/76">{buildBriefSummary(record)}</p>
+                  <p className="mt-2 text-xs text-ink-900/55">时间：{formatDateLabel(record.date)}</p>
 
-                  <section className="border-t border-moss-100 pt-4">
-                    <h4 className="text-sm font-semibold text-ink-900">仍需关注</h4>
-                    <ul className="mt-1 list-disc space-y-1 pl-5">
-                      {record.organized.problems.map((problem) => (
-                        <li key={problem}>{problem}</li>
-                      ))}
-                    </ul>
-                  </section>
+                  <details className="mt-2 text-xs text-ink-900/62">
+                    <summary className="cursor-pointer text-moss-700 hover:text-moss-800">
+                      查看详情
+                    </summary>
+                    <div className="mt-2 space-y-2 leading-6">
+                      <p>
+                        <span className="font-medium text-ink-900">本次完成：</span>
+                        {record.organized.completed_content}
+                      </p>
+                      {record.organized.problems.length > 0 ? (
+                        <p>
+                          <span className="font-medium text-ink-900">仍需关注：</span>
+                          {record.organized.problems.join("；")}
+                        </p>
+                      ) : null}
+                      {record.organized.next_suggestions.length > 0 ? (
+                        <p>
+                          <span className="font-medium text-ink-900">下次继续：</span>
+                          {record.organized.next_suggestions.join("；")}
+                        </p>
+                      ) : null}
+                      <p>
+                        <span className="font-medium text-ink-900">原始记录：</span>
+                        {record.raw_text}
+                      </p>
+                    </div>
+                  </details>
+                </article>
+              ))}
+            </div>
 
-                  <section className="border-t border-moss-100 pt-4">
-                    <h4 className="text-sm font-semibold text-ink-900">下次怎么继续</h4>
-                    <ul className="mt-1 list-disc space-y-1 pl-5">
-                      {record.organized.next_suggestions.map((item) => (
-                        <li key={item}>{item}</li>
-                      ))}
-                    </ul>
-                  </section>
-                </div>
-
-                <details className="pt-1 text-sm text-ink-900/58">
-                  <summary className="cursor-pointer text-sm text-ink-900/56 hover:text-ink-900/72">
-                    展开原始记录
-                  </summary>
-                  <p className="mt-2 rounded-xl border border-moss-100 bg-white/85 px-3 py-2 leading-6 text-ink-900/74">
-                    {record.raw_text}
-                  </p>
-                </details>
-              </article>
-            ))}
+            {hasMoreRecords ? (
+              <button
+                type="button"
+                onClick={() => setShowAllRecords((value) => !value)}
+                className="text-sm text-moss-700 underline-offset-4 hover:underline"
+              >
+                {showAllRecords ? "收起" : `展开全部（${selectedRecords.length} 条）`}
+              </button>
+            ) : null}
           </div>
         ) : (
           <p className="text-sm leading-7 text-ink-900/78">这个月份还没有记录。换个有打卡的月份试试看。</p>
