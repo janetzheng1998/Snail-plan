@@ -1,6 +1,6 @@
 {
   "$schema": "./node_modules/wrangler/config-schema.json",
-  "name": "snail-plan",
+  "name": "snailplan",
   "main": ".open-next/worker.js",
   "assets": {
     "directory": ".open-next/assets",
@@ -11,7 +11,7 @@
   "services": [
     {
       "binding": "WORKER_SELF_REFERENCE",
-      "service": "snail-plan"
+      "service": "snailplan"
     }
   ],
   "observability": {
