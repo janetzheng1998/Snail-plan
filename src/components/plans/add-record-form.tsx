@@ -118,7 +118,7 @@ export function AddRecordForm({ planId, planTitle, planDetailPath }: AddRecordFo
     setSaved(false);
 
     try {
-      const response = await fetch("/.netlify/functions/organize", {
+      const response = await fetch("/api/organize", {
         method: "POST",
         headers: {
           "Content-Type": "application/json"
