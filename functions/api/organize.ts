@@ -13,6 +13,17 @@ type OpenAIChatCompletionResponse = {
   }>;
 };
 
+type Env = {
+  OPENAI_API_KEY?: string;
+  OPENAI_ORGANIZE_MODEL?: string;
+  OPENAI_MODEL?: string;
+};
+
+type Context = {
+  env: Env;
+  request: Request;
+};
+
 function json(data: unknown, status = 200): Response {
   return new Response(JSON.stringify(data), {
     status,
@@ -59,6 +70,7 @@ function normalizeOrganized(value: unknown): OrganizedRecord | null {
 
 function parseJsonFromText(content: string): unknown {
   const trimmed = content.trim();
+
   try {
     return JSON.parse(trimmed);
   } catch {
@@ -75,19 +87,15 @@ function parseJsonFromText(content: string): unknown {
   }
 }
 
-export default async (request: Request): Promise<Response> => {
-  if (request.method !== "POST") {
-    return json({ error: "Method not allowed" }, 405);
-  }
-
-  const apiKey = process.env.OPENAI_API_KEY;
+export async function onRequestPost(context: Context): Promise<Response> {
+  const apiKey = context.env.OPENAI_API_KEY;
   if (!apiKey) {
     return json({ error: "Missing OPENAI_API_KEY" }, 500);
   }
 
-  const model = process.env.OPENAI_ORGANIZE_MODEL || process.env.OPENAI_MODEL || "gpt-4o-mini";
+  const model = context.env.OPENAI_ORGANIZE_MODEL || context.env.OPENAI_MODEL || "gpt-4o-mini";
 
-  const body = (await request.json().catch(() => null)) as Record<string, unknown> | null;
+  const body = (await context.request.json().catch(() => null)) as Record<string, unknown> | null;
   const text = typeof body?.text === "string" ? body.text.trim() : "";
   const planTitle = typeof body?.planTitle === "string" ? body.planTitle.trim() : "";
   const durationValue =
@@ -138,24 +146,10 @@ export default async (request: Request): Promise<Response> => {
             type: "object",
             additionalProperties: false,
             properties: {
-              summary: {
-                type: "string",
-                description: "一句话概括本次记录核心进展，建议 20-40 字。"
-              },
-              completedContent: {
-                type: "string",
-                description: "本次具体完成内容，1-2 句。"
-              },
-              issues: {
-                type: "array",
-                description: "本次暴露的问题点，0-3 条。",
-                items: { type: "string" }
-              },
-              nextActions: {
-                type: "array",
-                description: "下一步可执行行动，1-3 条。",
-                items: { type: "string" }
-              }
+              summary: { type: "string" },
+              completedContent: { type: "string" },
+              issues: { type: "array", items: { type: "string" } },
+              nextActions: { type: "array", items: { type: "string" } }
             },
             required: ["summary", "completedContent", "issues", "nextActions"]
           }
@@ -166,17 +160,12 @@ export default async (request: Request): Promise<Response> => {
 
   if (!completionResponse.ok) {
     const detail = await completionResponse.text();
-    return json(
-      {
-        error: "AI service request failed",
-        detail
-      },
-      502
-    );
+    return json({ error: "AI service request failed", detail }, 502);
   }
 
   const completionData = (await completionResponse.json()) as OpenAIChatCompletionResponse;
   const content = completionData.choices?.[0]?.message?.content;
+
   if (typeof content !== "string" || !content.trim()) {
     return json({ error: "AI response is empty" }, 502);
   }
@@ -188,4 +177,5 @@ export default async (request: Request): Promise<Response> => {
   }
 
   return json(normalized);
-};
+}
+
