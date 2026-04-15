@@ -19,12 +19,29 @@ type Context = {
   request: Request;
 };
 
-function json(data: unknown, status = 200): Response {
+const ORGANIZE_PROVIDER = "workers-ai";
+const ORGANIZE_API_VERSION = "2026-04-15";
+
+function withDefaultHeaders(extra?: HeadersInit): Headers {
+  const headers = new Headers({
+    "Content-Type": "application/json; charset=utf-8",
+    "Cache-Control": "no-store",
+    "X-Organize-Provider": ORGANIZE_PROVIDER,
+    "X-Organize-Version": ORGANIZE_API_VERSION
+  });
+
+  if (extra) {
+    const incoming = new Headers(extra);
+    incoming.forEach((value, key) => headers.set(key, value));
+  }
+
+  return headers;
+}
+
+function json(data: unknown, status = 200, headers?: HeadersInit): Response {
   return new Response(JSON.stringify(data), {
     status,
-    headers: {
-      "Content-Type": "application/json; charset=utf-8"
-    }
+    headers: withDefaultHeaders(headers)
   });
 }
 
@@ -79,6 +96,73 @@ function parseJsonFromText(content: string): unknown {
     } catch {
       return null;
     }
+  }
+}
+
+function readNested(value: unknown, path: Array<string | number>): unknown {
+  let current: unknown = value;
+  for (const key of path) {
+    if (typeof key === "number") {
+      if (!Array.isArray(current) || current.length <= key) {
+        return undefined;
+      }
+      current = current[key];
+      continue;
+    }
+
+    if (!current || typeof current !== "object" || !(key in (current as Record<string, unknown>))) {
+      return undefined;
+    }
+    current = (current as Record<string, unknown>)[key];
+  }
+  return current;
+}
+
+function tryNormalizeFromAny(value: unknown): OrganizedRecord | null {
+  const direct = normalizeOrganized(value);
+  if (direct) {
+    return direct;
+  }
+
+  if (typeof value === "string") {
+    const parsed = parseJsonFromText(value);
+    return normalizeOrganized(parsed);
+  }
+
+  return null;
+}
+
+function resolveOrganizedFromAiResult(aiResult: unknown): OrganizedRecord | null {
+  const candidates: unknown[] = [
+    aiResult,
+    readNested(aiResult, ["response"]),
+    readNested(aiResult, ["result"]),
+    readNested(aiResult, ["result", "response"]),
+    readNested(aiResult, ["output"]),
+    readNested(aiResult, ["output_text"]),
+    readNested(aiResult, ["choices", 0, "message", "content"]),
+    readNested(aiResult, ["choices", 0, "text"])
+  ];
+
+  for (const candidate of candidates) {
+    const normalized = tryNormalizeFromAny(candidate);
+    if (normalized) {
+      return normalized;
+    }
+  }
+
+  return null;
+}
+
+function compactDetail(value: unknown): string {
+  if (typeof value === "string") {
+    return value.slice(0, 600);
+  }
+
+  try {
+    return JSON.stringify(value).slice(0, 600);
+  } catch {
+    return String(value).slice(0, 600);
   }
 }
 
@@ -179,26 +263,35 @@ export async function onRequestPost(context: Context): Promise<Response> {
     }
   }
 
-  const directNormalized = normalizeOrganized(aiResult);
-  if (directNormalized) {
-    return json(directNormalized);
-  }
-
-  const responseText =
-    aiResult && typeof aiResult === "object" && "response" in aiResult
-      ? String((aiResult as { response?: unknown }).response ?? "")
-      : "";
-  const parsed = parseJsonFromText(responseText);
-  const normalized = normalizeOrganized(parsed);
+  const normalized = resolveOrganizedFromAiResult(aiResult);
   if (!normalized) {
     return json(
       {
         error: "Workers AI response format invalid",
-        detail: responseText.slice(0, 300)
+        detail: compactDetail(aiResult)
       },
       502
     );
   }
 
   return json(normalized);
+}
+
+export async function onRequestGet(): Promise<Response> {
+  return json(
+    {
+      ok: true,
+      provider: ORGANIZE_PROVIDER,
+      version: ORGANIZE_API_VERSION,
+      message: "Use POST /api/organize to organize text."
+    },
+    200
+  );
+}
+
+export async function onRequestOptions(): Promise<Response> {
+  return new Response(null, {
+    status: 204,
+    headers: withDefaultHeaders()
+  });
 }
