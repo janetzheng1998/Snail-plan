@@ -80,6 +80,67 @@ function normalizeOrganized(value: unknown): OrganizedRecord | null {
   };
 }
 
+function normalizePlainText(value: string): string {
+  return value
+    .replace(/\s+/g, "")
+    .replace(/[，。！？；、“”‘’：,.!?;:'"()\[\]{}<>《》]/g, "")
+    .trim();
+}
+
+function similarityByContainment(a: string, b: string): number {
+  const na = normalizePlainText(a);
+  const nb = normalizePlainText(b);
+  if (!na || !nb) {
+    return 0;
+  }
+
+  if (na.includes(nb) || nb.includes(na)) {
+    return Math.min(na.length, nb.length) / Math.max(na.length, nb.length);
+  }
+
+  let hit = 0;
+  for (const char of na) {
+    if (nb.includes(char)) {
+      hit += 1;
+    }
+  }
+  return hit / Math.max(na.length, nb.length);
+}
+
+function buildHeuristicFallback(text: string): OrganizedRecord {
+  const lines = text
+    .split(/\n+/)
+    .flatMap((line) => line.split(/[。！？!?]/))
+    .map((item) => item.trim())
+    .filter(Boolean);
+
+  const main = lines.slice(0, 2).join("，");
+  const issueCandidates = lines.filter((line) =>
+    /(问题|不够|不稳|困难|卡|不会|紧张|错误|不足|分心|头声|牙关|气息)/.test(line)
+  );
+  const issues = issueCandidates.slice(0, 3);
+
+  const nextActions =
+    issues.length > 0
+      ? issues.map((issue) => `针对“${issue.slice(0, 18)}”做 10 分钟分解练习`).slice(0, 3)
+      : ["拆成 2 个小目标分段练习", "每段录音回听 1 次并标注问题", "下次先热身再进入核心训练"];
+
+  return {
+    summary: main ? `本次聚焦练习并定位了关键问题：${main.slice(0, 28)}` : "本次完成了阶段训练并形成复盘",
+    completedContent: main || text.slice(0, 80),
+    issues,
+    nextActions
+  };
+}
+
+function needsRewrite(result: OrganizedRecord, rawText: string): boolean {
+  const summaryTooShort = normalizePlainText(result.summary).length < 8;
+  const completedTooSimilar = similarityByContainment(result.completedContent, rawText) > 0.86;
+  const summaryTooSimilar = similarityByContainment(result.summary, rawText) > 0.75;
+  const tooFewActions = result.nextActions.length === 0;
+  return summaryTooShort || completedTooSimilar || summaryTooSimilar || tooFewActions;
+}
+
 function parseJsonFromText(content: string): unknown {
   const trimmed = content.trim();
 
@@ -191,7 +252,8 @@ export async function onRequestPost(context: Context): Promise<Response> {
   const userPrompt = [
     "请把下面成长记录整理为 JSON，不要输出 JSON 以外的文字。",
     '字段要求：{"summary":string,"completedContent":string,"issues":string[],"nextActions":string[]}',
-    "要求：summary 一句话；completedContent 1-2句；issues 0-3条；nextActions 1-3条。",
+    "要求：summary 一句话（15-35字）；completedContent 1-2句；issues 1-3条；nextActions 2-3条。",
+    "重要：不要照抄原文；请先概括再表达，语言简洁、可执行。",
     planTitle ? `计划名称：${planTitle}` : "计划名称：未提供",
     durationValue ? `本次时长/次数：${durationValue}${durationUnit}` : "本次时长/次数：未提供",
     `原始记录：${text}`
@@ -265,13 +327,48 @@ export async function onRequestPost(context: Context): Promise<Response> {
 
   const normalized = resolveOrganizedFromAiResult(aiResult);
   if (!normalized) {
-    return json(
-      {
-        error: "Workers AI response format invalid",
-        detail: compactDetail(aiResult)
-      },
-      502
-    );
+    return json(buildHeuristicFallback(text));
+  }
+
+  if (needsRewrite(normalized, text)) {
+    const rewritePrompt = [
+      "请对以下结果进行二次改写，目标是更有复盘价值，禁止照抄原文。",
+      "只输出 JSON，字段必须为 summary/completedContent/issues/nextActions。",
+      `原始记录：${text}`,
+      `当前结果：${JSON.stringify(normalized)}`
+    ].join("\n");
+
+    try {
+      const retryResult = await aiBinding.run(model, {
+        messages: [
+          {
+            role: "system",
+            content:
+              "你是复盘教练。请将内容改写成更可执行、更有信息增量的复盘，不要机械复述。"
+          },
+          {
+            role: "user",
+            content: rewritePrompt
+          }
+        ],
+        temperature: 0.35,
+        max_tokens: 500
+      });
+
+      const rewritten = resolveOrganizedFromAiResult(retryResult);
+      if (rewritten && !needsRewrite(rewritten, text)) {
+        return json(rewritten);
+      }
+    } catch {
+      // fall through
+    }
+
+    return json({
+      ...buildHeuristicFallback(text),
+      issues: normalized.issues.length > 0 ? normalized.issues : buildHeuristicFallback(text).issues,
+      nextActions:
+        normalized.nextActions.length > 0 ? normalized.nextActions : buildHeuristicFallback(text).nextActions
+    });
   }
 
   return json(normalized);
