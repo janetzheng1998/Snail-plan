@@ -148,13 +148,70 @@ function buildHeuristicFallback(text: string): OrganizedRecord {
   };
 }
 
+function hasDurationHint(text: string): boolean {
+  return /\d+\s*(分钟|次|组|轮|遍)/.test(text);
+}
+
+function hasCheckHint(text: string): boolean {
+  return /(记录|回听|检查|确认|误差|稳定|不少于|至少|≤|>=|达成|完成|对比)/.test(text);
+}
+
+function isGenericAction(text: string): boolean {
+  return /(继续练习|提高|加强|注意|保持|巩固|准备|多练|再练|进一步)/.test(text) && !hasDurationHint(text);
+}
+
+function actionTemplateFromIssue(issue: string): string {
+  if (/(头声|高音|换声|音准)/.test(issue)) {
+    return "做 12 分钟头声稳定练习（每组 6 次，共 4 组），结束后回听录音并标记 1 处最不稳定音。";
+  }
+  if (/(牙关|口腔|咬字|共鸣)/.test(issue)) {
+    return "做 10 分钟口腔打开与咬字分解练习（2 轮），每轮结束录音并检查咬字清晰度是否提升。";
+  }
+  if (/(气息|呼吸|支撑)/.test(issue)) {
+    return "做 8 分钟气息支撑训练（4 轮呼吸+发声），每轮后记录一次是否出现气息断点。";
+  }
+  if (/(分心|状态慢|拖延|专注)/.test(issue)) {
+    return "先做 5 分钟专注热身再进入主练，主练分 2 段各 12 分钟，段末写 1 条当段问题。";
+  }
+  return `围绕“${issue.slice(0, 18)}”做 10 分钟分解练习（2 轮），每轮结束后记录 1 条改进点。`;
+}
+
+function toExecutableAction(action: string, issueHint?: string): string {
+  const trimmed = action.trim();
+  if (!trimmed) {
+    return issueHint ? actionTemplateFromIssue(issueHint) : "做 10 分钟分解练习（2 轮），结束后记录 1 条改进点。";
+  }
+
+  if (isGenericAction(trimmed) || (!hasDurationHint(trimmed) && !hasCheckHint(trimmed))) {
+    return issueHint ? actionTemplateFromIssue(issueHint) : `${trimmed}（10 分钟），结束后回听录音并记录 1 条改进点。`;
+  }
+
+  if (!hasDurationHint(trimmed) && hasCheckHint(trimmed)) {
+    return `${trimmed}（10 分钟）`;
+  }
+
+  if (hasDurationHint(trimmed) && !hasCheckHint(trimmed)) {
+    return `${trimmed}，结束后回听录音并记录 1 条改进点。`;
+  }
+
+  return trimmed;
+}
+
 function needsRewrite(result: OrganizedRecord, rawText: string): boolean {
   const summaryTooShort = normalizePlainText(result.summary).length < 8;
   const completedTooSimilar = similarityByContainment(result.completedContent, rawText) > 0.86;
   const summaryTooSimilar = similarityByContainment(result.summary, rawText) > 0.75;
   const tooFewActions = result.nextActions.length < 2;
   const tooFewIssues = result.issues.length < 2;
-  return summaryTooShort || completedTooSimilar || summaryTooSimilar || tooFewActions || tooFewIssues;
+  const hasGenericActions = result.nextActions.some((item) => isGenericAction(item));
+  return (
+    summaryTooShort ||
+    completedTooSimilar ||
+    summaryTooSimilar ||
+    tooFewActions ||
+    tooFewIssues ||
+    hasGenericActions
+  );
 }
 
 function parseJsonFromText(content: string): unknown {
@@ -247,13 +304,23 @@ function enforceQualityFloor(result: OrganizedRecord, rawText: string): Organize
   const fallback = buildHeuristicFallback(rawText);
   const uniqueIssues = [...new Set(result.issues.map((item) => item.trim()).filter(Boolean))];
   const uniqueActions = [...new Set(result.nextActions.map((item) => item.trim()).filter(Boolean))];
+  const mergedIssues =
+    (uniqueIssues.length >= 2 ? uniqueIssues : [...uniqueIssues, ...fallback.issues]).slice(0, 4);
+
+  const mergedActions = (uniqueActions.length >= 2 ? uniqueActions : [...uniqueActions, ...fallback.nextActions])
+    .map((action, index) => toExecutableAction(action, mergedIssues[index % Math.max(mergedIssues.length, 1)]))
+    .filter(Boolean);
+
+  const dedupedActions = [...new Set(mergedActions)].slice(0, 4);
 
   return {
     summary: result.summary.trim() || fallback.summary,
     completedContent: result.completedContent.trim() || fallback.completedContent,
-    issues: (uniqueIssues.length >= 2 ? uniqueIssues : [...uniqueIssues, ...fallback.issues]).slice(0, 4),
+    issues: mergedIssues,
     nextActions:
-      (uniqueActions.length >= 2 ? uniqueActions : [...uniqueActions, ...fallback.nextActions]).slice(0, 4)
+      dedupedActions.length >= 2
+        ? dedupedActions
+        : [...dedupedActions, ...fallback.nextActions.map((item, index) => toExecutableAction(item, mergedIssues[index % Math.max(mergedIssues.length, 1)]))].slice(0, 4)
   };
 }
 
@@ -288,7 +355,7 @@ export async function onRequestPost(context: Context): Promise<Response> {
     "2) summary 要提炼核心收获或核心问题，不能是原话缩写。",
     "3) completedContent 要总结“做了什么、识别了什么、推进了什么”。",
     "4) issues 用更抽象、更专业的表达提炼问题点，不要照搬用户词句。",
-    "5) nextActions 必须具体可执行，包含动作、对象或时长，不要空话。",
+    "5) nextActions 必须具体可执行，必须包含“动作 + 时长/次数 + 检查标准”，不要空话。",
     "6) 即使原始输入很短，也要补足分析感和复盘感。",
     "7) 语言自然、简洁、有条理，像认真复盘的助教。",
     planTitle ? `计划名称：${planTitle}` : "计划名称：未提供",
@@ -372,7 +439,7 @@ export async function onRequestPost(context: Context): Promise<Response> {
     const rewritePrompt = [
       "请对以下结果进行二次改写，目标是更有复盘价值，禁止照抄原文。",
       "只输出 JSON，字段必须为 summary/completedContent/issues/nextActions。",
-      "issues 必须 2-4 条，nextActions 必须 2-4 条，且建议可执行。",
+      "issues 必须 2-4 条，nextActions 必须 2-4 条，且每条都要满足“动作 + 时长/次数 + 检查标准”。",
       `原始记录：${text}`,
       `当前结果：${JSON.stringify(normalizedWithFloor)}`
     ].join("\n");
