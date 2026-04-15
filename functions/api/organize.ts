@@ -20,7 +20,7 @@ type Context = {
 };
 
 const ORGANIZE_PROVIDER = "workers-ai";
-const ORGANIZE_API_VERSION = "2026-04-15";
+const ORGANIZE_API_VERSION = "2026-04-15-v2";
 
 function withDefaultHeaders(extra?: HeadersInit): Headers {
   const headers = new Headers({
@@ -118,18 +118,33 @@ function buildHeuristicFallback(text: string): OrganizedRecord {
   const issueCandidates = lines.filter((line) =>
     /(问题|不够|不稳|困难|卡|不会|紧张|错误|不足|分心|头声|牙关|气息)/.test(line)
   );
-  const issues = issueCandidates.slice(0, 3);
+  const inferredIssues = [
+    /(头声|高音|音准|换声)/.test(text) ? "发声控制稳定性不足，关键声区衔接不够稳定" : "",
+    /(牙关|口腔|咬字|共鸣)/.test(text) ? "发声通道打开度不足，影响共鸣效率与音色统一" : "",
+    /(气息|呼吸)/.test(text) ? "气息支撑连续性不足，导致输出稳定性波动" : "",
+    /(分心|状态慢|拖延)/.test(text) ? "进入专注状态偏慢，训练有效时段占比偏低" : ""
+  ].filter(Boolean);
+  const issues = [...issueCandidates, ...inferredIssues]
+    .map((item) => item.trim())
+    .filter(Boolean)
+    .slice(0, 4);
 
   const nextActions =
     issues.length > 0
-      ? issues.map((issue) => `针对“${issue.slice(0, 18)}”做 10 分钟分解练习`).slice(0, 3)
-      : ["拆成 2 个小目标分段练习", "每段录音回听 1 次并标注问题", "下次先热身再进入核心训练"];
+      ? issues.map((issue) => `围绕“${issue.slice(0, 20)}”做 10 分钟分解练习并录音对比`).slice(0, 4)
+      : [
+          "把本次内容拆成 2 个可量化小目标，分别练习 12 分钟",
+          "每段练习后做 1 次录音回听，记录 1 个最明显问题",
+          "下次训练开始前先做 5 分钟针对性热身再进入主练"
+        ];
 
   return {
-    summary: main ? `本次聚焦练习并定位了关键问题：${main.slice(0, 28)}` : "本次完成了阶段训练并形成复盘",
+    summary: main
+      ? `本次训练完成了核心内容推进，并明确了影响稳定性的关键问题：${main.slice(0, 26)}`
+      : "本次训练完成了阶段推进，并形成了可执行的复盘方向",
     completedContent: main || text.slice(0, 80),
-    issues,
-    nextActions
+    issues: issues.length >= 2 ? issues : ["训练过程中的关键动作稳定性不足", "问题定位到改进动作之间的闭环不够完整"],
+    nextActions: nextActions.length >= 2 ? nextActions : ["将关键动作拆分成 2 段各练 10 分钟", "每段结束后立即复盘并记录下一步调整"]
   };
 }
 
@@ -137,8 +152,9 @@ function needsRewrite(result: OrganizedRecord, rawText: string): boolean {
   const summaryTooShort = normalizePlainText(result.summary).length < 8;
   const completedTooSimilar = similarityByContainment(result.completedContent, rawText) > 0.86;
   const summaryTooSimilar = similarityByContainment(result.summary, rawText) > 0.75;
-  const tooFewActions = result.nextActions.length === 0;
-  return summaryTooShort || completedTooSimilar || summaryTooSimilar || tooFewActions;
+  const tooFewActions = result.nextActions.length < 2;
+  const tooFewIssues = result.issues.length < 2;
+  return summaryTooShort || completedTooSimilar || summaryTooSimilar || tooFewActions || tooFewIssues;
 }
 
 function parseJsonFromText(content: string): unknown {
@@ -227,6 +243,20 @@ function compactDetail(value: unknown): string {
   }
 }
 
+function enforceQualityFloor(result: OrganizedRecord, rawText: string): OrganizedRecord {
+  const fallback = buildHeuristicFallback(rawText);
+  const uniqueIssues = [...new Set(result.issues.map((item) => item.trim()).filter(Boolean))];
+  const uniqueActions = [...new Set(result.nextActions.map((item) => item.trim()).filter(Boolean))];
+
+  return {
+    summary: result.summary.trim() || fallback.summary,
+    completedContent: result.completedContent.trim() || fallback.completedContent,
+    issues: (uniqueIssues.length >= 2 ? uniqueIssues : [...uniqueIssues, ...fallback.issues]).slice(0, 4),
+    nextActions:
+      (uniqueActions.length >= 2 ? uniqueActions : [...uniqueActions, ...fallback.nextActions]).slice(0, 4)
+  };
+}
+
 export async function onRequestPost(context: Context): Promise<Response> {
   const aiBinding = context.env.AI;
   if (!aiBinding || typeof aiBinding.run !== "function") {
@@ -250,10 +280,17 @@ export async function onRequestPost(context: Context): Promise<Response> {
   }
 
   const userPrompt = [
-    "请把下面成长记录整理为 JSON，不要输出 JSON 以外的文字。",
+    "请把下面杂乱记录整理为“复盘风格”的 JSON，不要输出 JSON 以外的任何文字。",
     '字段要求：{"summary":string,"completedContent":string,"issues":string[],"nextActions":string[]}',
-    "要求：summary 一句话（15-35字）；completedContent 1-2句；issues 1-3条；nextActions 2-3条。",
-    "重要：不要照抄原文；请先概括再表达，语言简洁、可执行。",
+    "要求：summary 一句话（15-35字）；completedContent 1-2句；issues 2-4条；nextActions 2-4条。",
+    "写作规则：",
+    "1) 不要照抄用户原句，不要连续复用原文措辞。",
+    "2) summary 要提炼核心收获或核心问题，不能是原话缩写。",
+    "3) completedContent 要总结“做了什么、识别了什么、推进了什么”。",
+    "4) issues 用更抽象、更专业的表达提炼问题点，不要照搬用户词句。",
+    "5) nextActions 必须具体可执行，包含动作、对象或时长，不要空话。",
+    "6) 即使原始输入很短，也要补足分析感和复盘感。",
+    "7) 语言自然、简洁、有条理，像认真复盘的助教。",
     planTitle ? `计划名称：${planTitle}` : "计划名称：未提供",
     durationValue ? `本次时长/次数：${durationValue}${durationUnit}` : "本次时长/次数：未提供",
     `原始记录：${text}`
@@ -268,7 +305,7 @@ export async function onRequestPost(context: Context): Promise<Response> {
         {
           role: "system",
           content:
-            "你是成长记录整理助手。输出必须是 JSON，且字段严格为 summary、completedContent、issues、nextActions。"
+            "你是成长型训练复盘助教。请在不照抄原文的前提下做提炼与分析。输出必须是 JSON，字段严格为 summary、completedContent、issues、nextActions。"
         },
         {
           role: "user",
@@ -285,8 +322,8 @@ export async function onRequestPost(context: Context): Promise<Response> {
           properties: {
             summary: { type: "string" },
             completedContent: { type: "string" },
-            issues: { type: "array", items: { type: "string" } },
-            nextActions: { type: "array", items: { type: "string" } }
+            issues: { type: "array", items: { type: "string" }, minItems: 2, maxItems: 4 },
+            nextActions: { type: "array", items: { type: "string" }, minItems: 2, maxItems: 4 }
           },
           required: ["summary", "completedContent", "issues", "nextActions"]
         }
@@ -299,7 +336,7 @@ export async function onRequestPost(context: Context): Promise<Response> {
           {
             role: "system",
             content:
-              "你是成长记录整理助手。输出必须是 JSON，字段为 summary、completedContent、issues、nextActions。"
+              "你是成长型训练复盘助教。输出必须是 JSON，字段为 summary、completedContent、issues、nextActions。不要照抄原文。"
           },
           {
             role: "user",
@@ -330,12 +367,14 @@ export async function onRequestPost(context: Context): Promise<Response> {
     return json(buildHeuristicFallback(text));
   }
 
-  if (needsRewrite(normalized, text)) {
+  const normalizedWithFloor = enforceQualityFloor(normalized, text);
+  if (needsRewrite(normalizedWithFloor, text)) {
     const rewritePrompt = [
       "请对以下结果进行二次改写，目标是更有复盘价值，禁止照抄原文。",
       "只输出 JSON，字段必须为 summary/completedContent/issues/nextActions。",
+      "issues 必须 2-4 条，nextActions 必须 2-4 条，且建议可执行。",
       `原始记录：${text}`,
-      `当前结果：${JSON.stringify(normalized)}`
+      `当前结果：${JSON.stringify(normalizedWithFloor)}`
     ].join("\n");
 
     try {
@@ -356,22 +395,20 @@ export async function onRequestPost(context: Context): Promise<Response> {
       });
 
       const rewritten = resolveOrganizedFromAiResult(retryResult);
-      if (rewritten && !needsRewrite(rewritten, text)) {
-        return json(rewritten);
+      if (rewritten) {
+        const rewrittenWithFloor = enforceQualityFloor(rewritten, text);
+        if (!needsRewrite(rewrittenWithFloor, text)) {
+          return json(rewrittenWithFloor);
+        }
       }
     } catch {
       // fall through
     }
 
-    return json({
-      ...buildHeuristicFallback(text),
-      issues: normalized.issues.length > 0 ? normalized.issues : buildHeuristicFallback(text).issues,
-      nextActions:
-        normalized.nextActions.length > 0 ? normalized.nextActions : buildHeuristicFallback(text).nextActions
-    });
+    return json(enforceQualityFloor(buildHeuristicFallback(text), text));
   }
 
-  return json(normalized);
+  return json(normalizedWithFloor);
 }
 
 export async function onRequestGet(): Promise<Response> {
