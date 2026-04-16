@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button, buttonClasses } from "@/components/ui/button";
 import { Card, CardText, CardTitle } from "@/components/ui/card";
@@ -19,6 +19,39 @@ type AddRecordFormProps = {
   planTitle: string;
   planDetailPath?: string;
 };
+
+type BrowserSpeechRecognitionConstructor = new () => BrowserSpeechRecognition;
+
+type BrowserSpeechRecognition = {
+  lang: string;
+  continuous: boolean;
+  interimResults: boolean;
+  onstart: (() => void) | null;
+  onend: (() => void) | null;
+  onerror: ((event: { error?: string }) => void) | null;
+  onresult: ((event: BrowserSpeechRecognitionEvent) => void) | null;
+  start: () => void;
+  stop: () => void;
+  abort?: () => void;
+};
+
+type BrowserSpeechRecognitionEvent = {
+  resultIndex: number;
+  results: ArrayLike<{
+    isFinal?: boolean;
+    length: number;
+    [index: number]: {
+      transcript?: string;
+    };
+  }>;
+};
+
+declare global {
+  interface Window {
+    SpeechRecognition?: BrowserSpeechRecognitionConstructor;
+    webkitSpeechRecognition?: BrowserSpeechRecognitionConstructor;
+  }
+}
 
 function buildLocalPreview(
   rawText: string,
@@ -100,10 +133,144 @@ export function AddRecordForm({ planId, planTitle, planDetailPath }: AddRecordFo
   const [generated, setGenerated] = useState(false);
   const [organizing, setOrganizing] = useState(false);
   const [organizeError, setOrganizeError] = useState("");
+  const [speechError, setSpeechError] = useState("");
+  const [speechStatus, setSpeechStatus] = useState("");
+  const [interimTranscript, setInterimTranscript] = useState("");
+  const [recognizing, setRecognizing] = useState(false);
   const [saved, setSaved] = useState(false);
   const [saveError, setSaveError] = useState("");
+  const recognitionRef = useRef<BrowserSpeechRecognition | null>(null);
   const fallbackRawText =
     "今天训练了 60 分钟，前半段进入状态慢，中段有分心，但后面通过分解练习把核心问题找出来了。";
+
+  useEffect(() => {
+    return () => {
+      recognitionRef.current?.abort?.();
+    };
+  }, []);
+
+  const appendTranscript = (transcript: string) => {
+    const cleaned = transcript.trim();
+    if (!cleaned) {
+      return;
+    }
+
+    setRawInput((current) => {
+      if (!current.trim()) {
+        return cleaned;
+      }
+
+      const suffix = current.endsWith("\n") ? "" : "\n";
+      return `${current}${suffix}${cleaned}`;
+    });
+  };
+
+  const getRecognitionErrorMessage = (errorCode: string) => {
+    if (errorCode === "not-allowed" || errorCode === "service-not-allowed") {
+      return "语音识别权限被拒绝，请在浏览器地址栏允许麦克风权限后重试。";
+    }
+
+    if (errorCode === "audio-capture") {
+      return "未检测到麦克风设备，请检查系统麦克风设置。";
+    }
+
+    if (errorCode === "no-speech") {
+      return "没有识别到语音，请靠近麦克风后重试。";
+    }
+
+    if (errorCode === "network") {
+      return "语音识别网络异常，请稍后重试。";
+    }
+
+    return "语音识别失败，请重试。";
+  };
+
+  const getRecognitionConstructor = (): BrowserSpeechRecognitionConstructor | null => {
+    if (typeof window === "undefined") {
+      return null;
+    }
+
+    return window.SpeechRecognition ?? window.webkitSpeechRecognition ?? null;
+  };
+
+  const ensureRecognition = (): BrowserSpeechRecognition | null => {
+    if (recognitionRef.current) {
+      return recognitionRef.current;
+    }
+
+    const RecognitionConstructor = getRecognitionConstructor();
+    if (!RecognitionConstructor) {
+      return null;
+    }
+
+    const instance = new RecognitionConstructor();
+    instance.lang = "zh-CN";
+    instance.continuous = true;
+    instance.interimResults = false;
+    instance.onstart = () => {
+      setRecognizing(true);
+      setSpeechStatus("正在录音/识别中...");
+      setSpeechError("");
+      setInterimTranscript("");
+    };
+    instance.onresult = (event) => {
+      let finalText = "";
+      let interimText = "";
+
+      for (let index = event.resultIndex; index < event.results.length; index += 1) {
+        const result = event.results[index];
+        const candidate = result?.[0]?.transcript?.trim() ?? "";
+        if (result?.isFinal && candidate) {
+          finalText += candidate;
+        } else if (candidate) {
+          interimText += candidate;
+        }
+      }
+
+      setInterimTranscript(interimText);
+      appendTranscript(finalText);
+    };
+    instance.onerror = (event) => {
+      setSpeechError(getRecognitionErrorMessage(event.error ?? ""));
+      setSpeechStatus("");
+      setInterimTranscript("");
+      setRecognizing(false);
+    };
+    instance.onend = () => {
+      setSpeechStatus("");
+      setInterimTranscript("");
+      setRecognizing(false);
+    };
+    recognitionRef.current = instance;
+    return instance;
+  };
+
+  const toggleSpeechRecognition = () => {
+    const recognition = ensureRecognition();
+    if (!recognition) {
+      setSpeechStatus("");
+      setInterimTranscript("");
+      setRecognizing(false);
+      setSpeechError("当前浏览器不支持语音识别，请使用最新版 Chrome 或 Edge。");
+      return;
+    }
+
+    if (recognizing) {
+      recognition.stop();
+      setSpeechStatus("正在停止识别...");
+      return;
+    }
+
+    setSpeechError("");
+    try {
+      recognition.start();
+    } catch {
+      setSpeechStatus("");
+      setInterimTranscript("");
+      setRecognizing(false);
+      setSpeechError("语音识别启动失败，请稍后重试。");
+    }
+  };
 
   const onOrganize = async () => {
     const normalizedRawInput = rawInput.trim() || fallbackRawText;
@@ -209,11 +376,32 @@ export function AddRecordForm({ planId, planTitle, planDetailPath }: AddRecordFo
           <Tag className="border-moss-200 bg-moss-50 text-moss-700">{planTitle}</Tag>
         </div>
 
-        <TextArea
-          value={rawInput}
-          onChange={(event) => setRawInput(event.target.value)}
-          placeholder="输入本次训练/学习后的杂乱记录，AI 会整理为：本次完成内容、暴露问题、下一步建议。"
-        />
+        <div className="space-y-2">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start">
+            <TextArea
+              value={rawInput}
+              onChange={(event) => setRawInput(event.target.value)}
+              placeholder="输入本次训练/学习后的杂乱记录，AI 会整理为：本次完成内容、暴露问题、下一步建议。"
+              className="sm:flex-1"
+            />
+            <Button
+              type="button"
+              variant={recognizing ? "primary" : "secondary"}
+              onClick={toggleSpeechRecognition}
+              className="h-11 shrink-0 whitespace-nowrap px-4"
+            >
+              {recognizing ? "停止识别" : "麦克风识别"}
+            </Button>
+          </div>
+
+          {speechStatus ? <p className="text-sm text-moss-700">{speechStatus}</p> : null}
+          {recognizing && interimTranscript ? (
+            <div className="rounded-xl border border-moss-200 bg-moss-50/70 px-3 py-2 text-sm text-ink-900/75">
+              实时识别：{interimTranscript}
+            </div>
+          ) : null}
+          {speechError ? <p className="text-sm text-red-600">{speechError}</p> : null}
+        </div>
 
         <div className="grid gap-3 sm:grid-cols-2">
           <label className="space-y-2 text-sm text-ink-900/85">
