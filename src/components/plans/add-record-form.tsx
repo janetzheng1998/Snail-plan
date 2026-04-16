@@ -48,6 +48,11 @@ type BrowserSpeechRecognitionEvent = {
   }>;
 };
 
+function getLocalDateString(): string {
+  const now = new Date();
+  return new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+}
+
 declare global {
   interface Window {
     SpeechRecognition?: BrowserSpeechRecognitionConstructor;
@@ -148,6 +153,7 @@ function normalizeOrganizedResult(
 export function AddRecordForm({ planId, planTitle, planDetailPath }: AddRecordFormProps) {
   const router = useRouter();
   const resolvedPlanDetailPath = planDetailPath ?? `/plans/${planId}`;
+  const [recordDate, setRecordDate] = useState(() => getLocalDateString());
   const [rawInput, setRawInput] = useState("");
   const [durationValue, setDurationValue] = useState(60);
   const [durationUnit, setDurationUnit] = useState<(typeof recordUnits)[number]>("分钟");
@@ -359,10 +365,7 @@ export function AddRecordForm({ planId, planTitle, planDetailPath }: AddRecordFo
   };
 
   const onSave = () => {
-    const now = new Date();
-    const localDate = new Date(now.getTime() - now.getTimezoneOffset() * 60000)
-      .toISOString()
-      .slice(0, 10);
+    const resolvedDate = /^\d{4}-\d{2}-\d{2}$/.test(recordDate) ? recordDate : getLocalDateString();
 
     const sessionIndex = parsePositiveInteger(sessionIndexInput);
     const sessionLabel = sessionIndex ? `第${sessionIndex}${sessionUnit}` : "";
@@ -370,7 +373,7 @@ export function AddRecordForm({ planId, planTitle, planDetailPath }: AddRecordFo
     try {
       const savedRecord = saveLocalRecord({
         planId,
-        date: localDate,
+        date: resolvedDate,
         rawText: rawInput.trim() || fallbackRawText,
         durationValue,
         durationUnit,
@@ -412,7 +415,18 @@ export function AddRecordForm({ planId, planTitle, planDetailPath }: AddRecordFo
   return (
     <div className="space-y-6">
       <Card className="space-y-4">
-        <CardTitle className="text-xl">{planTitle.trim() || "为计划新增记录"}</CardTitle>
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <CardTitle className="text-xl">{planTitle.trim() || "为计划新增记录"}</CardTitle>
+          <label className="inline-flex items-center gap-2 text-sm text-ink-900/72">
+            <span>记录日期</span>
+            <input
+              type="date"
+              value={recordDate}
+              onChange={(event) => setRecordDate(event.target.value)}
+              className="h-10 w-[11.5rem] rounded-xl border border-moss-300 bg-white px-3 text-sm text-ink-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-moss-300"
+            />
+          </label>
+        </div>
 
         <div className="space-y-3">
           <div className="relative">
@@ -467,7 +481,7 @@ export function AddRecordForm({ planId, planTitle, planDetailPath }: AddRecordFo
           {speechError ? <p className="text-sm text-red-600">{speechError}</p> : null}
         </div>
 
-        <div className="grid gap-3 sm:grid-cols-2">
+        <div className="grid gap-3 sm:max-w-4xl sm:grid-cols-2">
           <label className="space-y-2 text-sm text-ink-900/85">
             <span className="block font-medium">本次时长/次数</span>
             <input
@@ -497,7 +511,7 @@ export function AddRecordForm({ planId, planTitle, planDetailPath }: AddRecordFo
           </label>
         </div>
 
-        <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_11rem]">
+        <div className="grid gap-3 sm:max-w-3xl sm:grid-cols-[minmax(0,1fr)_9rem]">
           <label className="space-y-2 text-sm text-ink-900/85">
             <span className="block font-medium">这是第几节/次/天</span>
             <input
