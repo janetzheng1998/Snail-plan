@@ -481,76 +481,69 @@ export function AddRecordForm({ planId, planTitle, planDetailPath }: AddRecordFo
           {speechError ? <p className="text-sm text-red-600">{speechError}</p> : null}
         </div>
 
-        <div className="space-y-4 md:max-w-5xl">
-          <div className="grid gap-3 md:grid-cols-2">
-            <section className="space-y-3 rounded-2xl border border-moss-200 bg-white/70 p-4">
-              <p className="text-sm font-medium text-ink-900/70">本次记录信息</p>
-              <div className="space-y-3">
-                <label className="space-y-1.5 text-sm text-ink-900/85">
-                  <span className="block font-medium">本次时长/次数</span>
-                  <input
-                    type="number"
-                    min={1}
-                    value={durationValue}
-                    onChange={(event) => setDurationValue(Number(event.target.value))}
-                    className="h-10 w-full max-w-[14rem] rounded-xl border border-moss-300 bg-white px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-moss-300"
-                  />
-                </label>
+        <div className="space-y-3 md:max-w-5xl">
+          <div className="space-y-2 rounded-2xl border border-moss-200/90 bg-white/55 p-4">
+            <p className="text-sm font-medium text-ink-900/72">记录信息</p>
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              <label className="space-y-1.5 text-sm text-ink-900/85">
+                <span className="block font-medium">时长</span>
+                <input
+                  type="number"
+                  min={1}
+                  value={durationValue}
+                  onChange={(event) => setDurationValue(Number(event.target.value))}
+                  className="h-10 w-full rounded-xl border border-moss-300 bg-white px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-moss-300"
+                />
+              </label>
 
-                <label className="space-y-1.5 text-sm text-ink-900/85">
-                  <span className="block font-medium">记录单位</span>
-                  <select
-                    value={durationUnit}
-                    onChange={(event) =>
-                      setDurationUnit(event.target.value as (typeof recordUnits)[number])
-                    }
-                    className="h-10 w-full max-w-[11rem] rounded-xl border border-moss-300 bg-white px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-moss-300"
-                  >
-                    {recordUnits.map((item) => (
-                      <option key={item} value={item}>
-                        {item}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              </div>
-            </section>
+              <label className="space-y-1.5 text-sm text-ink-900/85">
+                <span className="block font-medium">单位</span>
+                <select
+                  value={durationUnit}
+                  onChange={(event) =>
+                    setDurationUnit(event.target.value as (typeof recordUnits)[number])
+                  }
+                  className="h-10 w-full rounded-xl border border-moss-300 bg-white px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-moss-300"
+                >
+                  {recordUnits.map((item) => (
+                    <option key={item} value={item}>
+                      {item}
+                    </option>
+                  ))}
+                </select>
+              </label>
 
-            <section className="space-y-3 rounded-2xl border border-moss-200 bg-white/70 p-4">
-              <p className="text-sm font-medium text-ink-900/70">进度定位</p>
-              <div className="space-y-3">
-                <label className="space-y-1.5 text-sm text-ink-900/85">
-                  <span className="block font-medium">这是第几节/次/天</span>
-                  <input
-                    type="number"
-                    min={1}
-                    step={1}
-                    value={sessionIndexInput}
-                    onChange={(event) => setSessionIndexInput(event.target.value)}
-                    placeholder="例如 3"
-                    className="h-10 w-full max-w-[14rem] rounded-xl border border-moss-300 bg-white px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-moss-300"
-                  />
-                </label>
+              <label className="space-y-1.5 text-sm text-ink-900/85">
+                <span className="block font-medium">序号</span>
+                <input
+                  type="number"
+                  min={1}
+                  step={1}
+                  value={sessionIndexInput}
+                  onChange={(event) => setSessionIndexInput(event.target.value)}
+                  placeholder="例如 3"
+                  className="h-10 w-full rounded-xl border border-moss-300 bg-white px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-moss-300"
+                />
+              </label>
 
-                <label className="space-y-1.5 text-sm text-ink-900/85">
-                  <span className="block font-medium">序号单位</span>
-                  <select
-                    value={sessionUnit}
-                    onChange={(event) => setSessionUnit(event.target.value as SessionUnit)}
-                    className="h-10 w-full max-w-[9rem] rounded-xl border border-moss-300 bg-white px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-moss-300"
-                  >
-                    {sessionUnits.map((item) => (
-                      <option key={item} value={item}>
-                        {item}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              </div>
-            </section>
+              <label className="space-y-1.5 text-sm text-ink-900/85">
+                <span className="block font-medium">序号单位</span>
+                <select
+                  value={sessionUnit}
+                  onChange={(event) => setSessionUnit(event.target.value as SessionUnit)}
+                  className="h-10 w-full rounded-xl border border-moss-300 bg-white px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-moss-300"
+                >
+                  {sessionUnits.map((item) => (
+                    <option key={item} value={item}>
+                      {item}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
           </div>
 
-          <div className="flex flex-wrap items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3 pt-1">
             <Button type="button" onClick={onOrganize} disabled={organizing}>
               {organizing ? "AI 整理中..." : "AI 整理本次记录"}
             </Button>
