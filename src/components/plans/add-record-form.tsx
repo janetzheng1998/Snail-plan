@@ -377,24 +377,47 @@ export function AddRecordForm({ planId, planTitle, planDetailPath }: AddRecordFo
         </div>
 
         <div className="space-y-2">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-start">
-            <TextArea
-              value={rawInput}
-              onChange={(event) => setRawInput(event.target.value)}
-              placeholder="输入本次训练/学习后的杂乱记录，AI 会整理为：本次完成内容、暴露问题、下一步建议。"
-              className="sm:flex-1"
-            />
-            <Button
+          <TextArea
+            value={rawInput}
+            onChange={(event) => setRawInput(event.target.value)}
+            placeholder="输入本次训练/学习后的杂乱记录，AI 会整理为：本次完成内容、暴露问题、下一步建议。"
+          />
+
+          <div className="flex items-center gap-2">
+            <button
               type="button"
-              variant={recognizing ? "primary" : "secondary"}
               onClick={toggleSpeechRecognition}
-              className="h-11 shrink-0 whitespace-nowrap px-4"
+              className="inline-flex h-8 w-8 items-center justify-center border-0 bg-transparent p-0 text-moss-700 transition-colors hover:text-moss-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-moss-300 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent"
+              aria-label={recognizing ? "停止语音识别" : "开始语音识别"}
+              title={recognizing ? "停止语音识别" : "开始语音识别"}
             >
-              {recognizing ? "停止识别" : "麦克风识别"}
-            </Button>
+              <svg
+                viewBox="0 0 24 24"
+                aria-hidden="true"
+                className={recognizing ? "h-6 w-6 text-red-500" : "h-6 w-6"}
+                fill="none"
+                xmlns="http://www.w3.org/2000/svg"
+              >
+                <path
+                  d="M12 3a3 3 0 0 0-3 3v6a3 3 0 1 0 6 0V6a3 3 0 0 0-3-3Z"
+                  stroke="currentColor"
+                  strokeWidth="1.8"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+                <path
+                  d="M6.5 11.5a5.5 5.5 0 0 0 11 0M12 17v4M9 21h6"
+                  stroke="currentColor"
+                  strokeWidth="1.8"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
+            </button>
+
+            {speechStatus ? <p className="text-sm text-moss-700">{speechStatus}</p> : null}
           </div>
 
-          {speechStatus ? <p className="text-sm text-moss-700">{speechStatus}</p> : null}
           {recognizing && interimTranscript ? (
             <div className="rounded-xl border border-moss-200 bg-moss-50/70 px-3 py-2 text-sm text-ink-900/75">
               实时识别：{interimTranscript}
