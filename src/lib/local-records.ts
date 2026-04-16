@@ -10,6 +10,8 @@ export type LocalOrganizedRecord = {
   nextActions: string[];
 };
 
+export type LocalRecordSessionUnit = "节" | "次" | "天";
+
 export type LocalRecord = {
   id: string;
   planId: string;
@@ -18,6 +20,8 @@ export type LocalRecord = {
   organized: LocalOrganizedRecord;
   durationValue?: number;
   durationUnit?: RecordUnit;
+  sessionIndex?: number;
+  sessionUnit?: LocalRecordSessionUnit;
 };
 
 export type SaveLocalRecordInput = Omit<LocalRecord, "id"> & { id?: string };

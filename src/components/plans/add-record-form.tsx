@@ -5,7 +5,6 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button, buttonClasses } from "@/components/ui/button";
 import { Card, CardText, CardTitle } from "@/components/ui/card";
-import { Tag } from "@/components/ui/tag";
 import { TextArea } from "@/components/ui/text-area";
 import {
   getLocalRecordsByPlanId,
@@ -19,6 +18,9 @@ type AddRecordFormProps = {
   planTitle: string;
   planDetailPath?: string;
 };
+
+const sessionUnits = ["节", "次", "天"] as const;
+type SessionUnit = (typeof sessionUnits)[number];
 
 type BrowserSpeechRecognitionConstructor = new () => BrowserSpeechRecognition;
 
@@ -56,7 +58,8 @@ declare global {
 function buildLocalPreview(
   rawText: string,
   durationValue: number,
-  durationUnit: (typeof recordUnits)[number]
+  durationUnit: (typeof recordUnits)[number],
+  sessionLabel?: string
 ): LocalOrganizedRecord {
   const sentences = rawText
     .replace(/\s+/g, " ")
@@ -65,10 +68,11 @@ function buildLocalPreview(
     .filter(Boolean);
   const shortText = rawText.length > 44 ? `${rawText.slice(0, 44)}...` : rawText;
   const issueSentence = sentences.find((item) => /(慢|卡|分心|问题|不足|紧张|疲劳|不稳)/.test(item));
+  const sessionPrefix = sessionLabel ? `${sessionLabel}，` : "";
 
   return {
-    summary: `完成 ${durationValue}${durationUnit} 的记录，核心片段：${shortText}`,
-    completedContent: `完成 ${durationValue}${durationUnit} 的训练/学习，重点记录：${shortText}`,
+    summary: `${sessionPrefix}完成 ${durationValue}${durationUnit} 的记录，核心片段：${shortText}`,
+    completedContent: `${sessionPrefix}完成 ${durationValue}${durationUnit} 的训练/学习，重点记录：${shortText}`,
     issues: issueSentence
       ? [issueSentence]
       : ["本次记录未明确提到阻碍点，建议下次补充“最卡的一步”。"],
@@ -79,6 +83,24 @@ function buildLocalPreview(
         : "结束后立刻写下 3 行复盘：完成了什么、卡在哪里、下一步做什么。"
     ]
   };
+}
+
+function parsePositiveInteger(input: string): number | undefined {
+  if (!input.trim()) {
+    return undefined;
+  }
+
+  const parsed = Number(input);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return undefined;
+  }
+
+  return Math.floor(parsed);
+}
+
+function formatSessionLabel(sessionIndexInput: string, sessionUnit: SessionUnit): string {
+  const sessionIndex = parsePositiveInteger(sessionIndexInput);
+  return sessionIndex ? `第${sessionIndex}${sessionUnit}` : "";
 }
 
 function readStringArray(value: unknown): string[] {
@@ -129,6 +151,8 @@ export function AddRecordForm({ planId, planTitle, planDetailPath }: AddRecordFo
   const [rawInput, setRawInput] = useState("");
   const [durationValue, setDurationValue] = useState(60);
   const [durationUnit, setDurationUnit] = useState<(typeof recordUnits)[number]>("分钟");
+  const [sessionIndexInput, setSessionIndexInput] = useState("1");
+  const [sessionUnit, setSessionUnit] = useState<SessionUnit>("次");
   const [organizedPreview, setOrganizedPreview] = useState<LocalOrganizedRecord | null>(null);
   const [generated, setGenerated] = useState(false);
   const [organizing, setOrganizing] = useState(false);
@@ -274,7 +298,13 @@ export function AddRecordForm({ planId, planTitle, planDetailPath }: AddRecordFo
 
   const onOrganize = async () => {
     const normalizedRawInput = rawInput.trim() || fallbackRawText;
-    const localFallback = buildLocalPreview(normalizedRawInput, durationValue, durationUnit);
+    const sessionLabel = formatSessionLabel(sessionIndexInput, sessionUnit);
+    const localFallback = buildLocalPreview(
+      normalizedRawInput,
+      durationValue,
+      durationUnit,
+      sessionLabel || undefined
+    );
 
     if (!rawInput.trim()) {
       setRawInput(fallbackRawText);
@@ -293,6 +323,7 @@ export function AddRecordForm({ planId, planTitle, planDetailPath }: AddRecordFo
         body: JSON.stringify({
           text: normalizedRawInput,
           planTitle,
+          sessionLabel: sessionLabel || undefined,
           durationValue,
           durationUnit
         })
@@ -333,6 +364,9 @@ export function AddRecordForm({ planId, planTitle, planDetailPath }: AddRecordFo
       .toISOString()
       .slice(0, 10);
 
+    const sessionIndex = parsePositiveInteger(sessionIndexInput);
+    const sessionLabel = sessionIndex ? `第${sessionIndex}${sessionUnit}` : "";
+
     try {
       const savedRecord = saveLocalRecord({
         planId,
@@ -340,9 +374,16 @@ export function AddRecordForm({ planId, planTitle, planDetailPath }: AddRecordFo
         rawText: rawInput.trim() || fallbackRawText,
         durationValue,
         durationUnit,
+        sessionIndex,
+        sessionUnit: sessionIndex ? sessionUnit : undefined,
         organized:
           organizedPreview ??
-          buildLocalPreview(rawInput.trim() || fallbackRawText, durationValue, durationUnit)
+          buildLocalPreview(
+            rawInput.trim() || fallbackRawText,
+            durationValue,
+            durationUnit,
+            sessionLabel || undefined
+          )
       });
       const savedInStorage = getLocalRecordsByPlanId(planId).some((item) => item.id === savedRecord.id);
 
@@ -371,59 +412,14 @@ export function AddRecordForm({ planId, planTitle, planDetailPath }: AddRecordFo
   return (
     <div className="space-y-6">
       <Card className="space-y-4">
-        <div className="space-y-1">
-          <CardTitle className="text-xl">为计划新增记录</CardTitle>
-          <Tag className="border-moss-200 bg-moss-50 text-moss-700">{planTitle}</Tag>
-        </div>
+        <CardTitle className="text-xl">{planTitle.trim() || "为计划新增记录"}</CardTitle>
 
-        <div className="space-y-2">
+        <div className="space-y-3">
           <TextArea
             value={rawInput}
             onChange={(event) => setRawInput(event.target.value)}
             placeholder="输入本次训练/学习后的杂乱记录，AI 会整理为：本次完成内容、暴露问题、下一步建议。"
           />
-
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={toggleSpeechRecognition}
-              className="inline-flex h-8 w-8 items-center justify-center border-0 bg-transparent p-0 text-moss-700 transition-colors hover:text-moss-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-moss-300 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent"
-              aria-label={recognizing ? "停止语音识别" : "开始语音识别"}
-              title={recognizing ? "停止语音识别" : "开始语音识别"}
-            >
-              <svg
-                viewBox="0 0 24 24"
-                aria-hidden="true"
-                className={recognizing ? "h-6 w-6 text-red-500" : "h-6 w-6"}
-                fill="none"
-                xmlns="http://www.w3.org/2000/svg"
-              >
-                <path
-                  d="M12 3a3 3 0 0 0-3 3v6a3 3 0 1 0 6 0V6a3 3 0 0 0-3-3Z"
-                  stroke="currentColor"
-                  strokeWidth="1.8"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-                <path
-                  d="M6.5 11.5a5.5 5.5 0 0 0 11 0M12 17v4M9 21h6"
-                  stroke="currentColor"
-                  strokeWidth="1.8"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-              </svg>
-            </button>
-
-            {speechStatus ? <p className="text-sm text-moss-700">{speechStatus}</p> : null}
-          </div>
-
-          {recognizing && interimTranscript ? (
-            <div className="rounded-xl border border-moss-200 bg-moss-50/70 px-3 py-2 text-sm text-ink-900/75">
-              实时识别：{interimTranscript}
-            </div>
-          ) : null}
-          {speechError ? <p className="text-sm text-red-600">{speechError}</p> : null}
         </div>
 
         <div className="grid gap-3 sm:grid-cols-2">
@@ -456,13 +452,91 @@ export function AddRecordForm({ planId, planTitle, planDetailPath }: AddRecordFo
           </label>
         </div>
 
-        <div className="flex flex-wrap gap-3">
-          <Button type="button" onClick={onOrganize} disabled={organizing}>
-            {organizing ? "AI 整理中..." : "AI 整理本次记录"}
-          </Button>
-          <Link href={resolvedPlanDetailPath} className={buttonClasses("ghost", "md")}>
-            返回计划详情
-          </Link>
+        <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_11rem]">
+          <label className="space-y-2 text-sm text-ink-900/85">
+            <span className="block font-medium">这是第几节/次/天</span>
+            <input
+              type="number"
+              min={1}
+              step={1}
+              value={sessionIndexInput}
+              onChange={(event) => setSessionIndexInput(event.target.value)}
+              placeholder="例如 3"
+              className="h-11 w-full rounded-xl border border-moss-300 bg-white px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-moss-300"
+            />
+          </label>
+
+          <label className="space-y-2 text-sm text-ink-900/85">
+            <span className="block font-medium">序号单位</span>
+            <select
+              value={sessionUnit}
+              onChange={(event) => setSessionUnit(event.target.value as SessionUnit)}
+              className="h-11 w-full rounded-xl border border-moss-300 bg-white px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-moss-300"
+            >
+              {sessionUnits.map((item) => (
+                <option key={item} value={item}>
+                  {item}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+
+        <div className="space-y-2">
+          <div className="flex flex-wrap items-center gap-3">
+            <button
+              type="button"
+              onClick={toggleSpeechRecognition}
+              aria-label={recognizing ? "停止语音识别" : "开始语音识别"}
+              title={recognizing ? "停止语音识别" : "开始语音识别"}
+              className={[
+                "inline-flex h-11 w-11 items-center justify-center rounded-full border transition-all duration-200",
+                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-moss-300 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent",
+                "active:scale-[0.97]",
+                recognizing
+                  ? "animate-pulse border-red-200 bg-red-50 text-red-600 shadow-sm shadow-red-200/40"
+                  : "border-moss-200 bg-white/90 text-moss-700 hover:border-moss-400 hover:bg-moss-50"
+              ].join(" ")}
+            >
+              <svg
+                viewBox="0 0 24 24"
+                aria-hidden="true"
+                className="h-5 w-5"
+                fill="none"
+                xmlns="http://www.w3.org/2000/svg"
+              >
+                <path
+                  d="M12 3a3 3 0 0 0-3 3v6a3 3 0 1 0 6 0V6a3 3 0 0 0-3-3Z"
+                  stroke="currentColor"
+                  strokeWidth="1.8"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+                <path
+                  d="M6.5 11.5a5.5 5.5 0 0 0 11 0M12 17v4M9 21h6"
+                  stroke="currentColor"
+                  strokeWidth="1.8"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
+            </button>
+
+            <Button type="button" onClick={onOrganize} disabled={organizing}>
+              {organizing ? "AI 整理中..." : "AI 整理本次记录"}
+            </Button>
+            <Link href={resolvedPlanDetailPath} className={buttonClasses("ghost", "md")}>
+              返回计划详情
+            </Link>
+          </div>
+
+          {speechStatus ? <p className="text-sm text-moss-700">{speechStatus}</p> : null}
+          {recognizing && interimTranscript ? (
+            <div className="rounded-xl border border-moss-200 bg-moss-50/70 px-3 py-2 text-sm text-ink-900/75">
+              实时识别：{interimTranscript}
+            </div>
+          ) : null}
+          {speechError ? <p className="text-sm text-red-600">{speechError}</p> : null}
         </div>
       </Card>
 
@@ -497,7 +571,11 @@ export function AddRecordForm({ planId, planTitle, planDetailPath }: AddRecordFo
             </div>
 
             <div className="rounded-xl border border-moss-200 bg-moss-50/70 p-3 text-sm">
-              本次记录：{durationValue}
+              本次记录：
+              {formatSessionLabel(sessionIndexInput, sessionUnit)
+                ? `${formatSessionLabel(sessionIndexInput, sessionUnit)} · `
+                : ""}
+              {durationValue}
               {durationUnit}
             </div>
 
