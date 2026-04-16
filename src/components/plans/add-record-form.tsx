@@ -415,11 +415,56 @@ export function AddRecordForm({ planId, planTitle, planDetailPath }: AddRecordFo
         <CardTitle className="text-xl">{planTitle.trim() || "为计划新增记录"}</CardTitle>
 
         <div className="space-y-3">
-          <TextArea
-            value={rawInput}
-            onChange={(event) => setRawInput(event.target.value)}
-            placeholder="输入本次训练/学习后的杂乱记录，AI 会整理为：本次完成内容、暴露问题、下一步建议。"
-          />
+          <div className="relative">
+            <TextArea
+              value={rawInput}
+              onChange={(event) => setRawInput(event.target.value)}
+              placeholder="输入本次训练/学习后的杂乱记录，AI 会整理为：本次完成内容、暴露问题、下一步建议。"
+              className="pb-12 pr-12"
+            />
+            <button
+              type="button"
+              onClick={toggleSpeechRecognition}
+              aria-label={recognizing ? "停止语音识别" : "开始语音识别"}
+              title={recognizing ? "停止语音识别" : "开始语音识别"}
+              className={[
+                "absolute bottom-3 right-3 inline-flex h-8 w-8 items-center justify-center rounded-full border-0 bg-transparent p-0 transition-colors duration-200",
+                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-moss-300 focus-visible:ring-offset-1",
+                recognizing ? "animate-pulse text-red-500" : "text-moss-700/85 hover:text-moss-800"
+              ].join(" ")}
+            >
+              <svg
+                viewBox="0 0 24 24"
+                aria-hidden="true"
+                className="h-5 w-5"
+                fill="none"
+                xmlns="http://www.w3.org/2000/svg"
+              >
+                <path
+                  d="M12 3a3 3 0 0 0-3 3v6a3 3 0 1 0 6 0V6a3 3 0 0 0-3-3Z"
+                  stroke="currentColor"
+                  strokeWidth="1.8"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+                <path
+                  d="M6.5 11.5a5.5 5.5 0 0 0 11 0M12 17v4M9 21h6"
+                  stroke="currentColor"
+                  strokeWidth="1.8"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
+            </button>
+          </div>
+
+          {speechStatus ? <p className="text-sm text-moss-700">{speechStatus}</p> : null}
+          {recognizing && interimTranscript ? (
+            <div className="rounded-xl border border-moss-200 bg-moss-50/70 px-3 py-2 text-sm text-ink-900/75">
+              实时识别：{interimTranscript}
+            </div>
+          ) : null}
+          {speechError ? <p className="text-sm text-red-600">{speechError}</p> : null}
         </div>
 
         <div className="grid gap-3 sm:grid-cols-2">
@@ -484,44 +529,6 @@ export function AddRecordForm({ planId, planTitle, planDetailPath }: AddRecordFo
 
         <div className="space-y-2">
           <div className="flex flex-wrap items-center gap-3">
-            <button
-              type="button"
-              onClick={toggleSpeechRecognition}
-              aria-label={recognizing ? "停止语音识别" : "开始语音识别"}
-              title={recognizing ? "停止语音识别" : "开始语音识别"}
-              className={[
-                "inline-flex h-11 w-11 items-center justify-center rounded-full border transition-all duration-200",
-                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-moss-300 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent",
-                "active:scale-[0.97]",
-                recognizing
-                  ? "animate-pulse border-red-200 bg-red-50 text-red-600 shadow-sm shadow-red-200/40"
-                  : "border-moss-200 bg-white/90 text-moss-700 hover:border-moss-400 hover:bg-moss-50"
-              ].join(" ")}
-            >
-              <svg
-                viewBox="0 0 24 24"
-                aria-hidden="true"
-                className="h-5 w-5"
-                fill="none"
-                xmlns="http://www.w3.org/2000/svg"
-              >
-                <path
-                  d="M12 3a3 3 0 0 0-3 3v6a3 3 0 1 0 6 0V6a3 3 0 0 0-3-3Z"
-                  stroke="currentColor"
-                  strokeWidth="1.8"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-                <path
-                  d="M6.5 11.5a5.5 5.5 0 0 0 11 0M12 17v4M9 21h6"
-                  stroke="currentColor"
-                  strokeWidth="1.8"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-              </svg>
-            </button>
-
             <Button type="button" onClick={onOrganize} disabled={organizing}>
               {organizing ? "AI 整理中..." : "AI 整理本次记录"}
             </Button>
@@ -529,14 +536,6 @@ export function AddRecordForm({ planId, planTitle, planDetailPath }: AddRecordFo
               返回计划详情
             </Link>
           </div>
-
-          {speechStatus ? <p className="text-sm text-moss-700">{speechStatus}</p> : null}
-          {recognizing && interimTranscript ? (
-            <div className="rounded-xl border border-moss-200 bg-moss-50/70 px-3 py-2 text-sm text-ink-900/75">
-              实时识别：{interimTranscript}
-            </div>
-          ) : null}
-          {speechError ? <p className="text-sm text-red-600">{speechError}</p> : null}
         </div>
       </Card>
 
