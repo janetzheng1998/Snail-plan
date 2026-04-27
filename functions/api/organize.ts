@@ -20,7 +20,7 @@ type Context = {
 };
 
 const ORGANIZE_PROVIDER = "workers-ai";
-const ORGANIZE_API_VERSION = "2026-04-15-v2";
+const ORGANIZE_API_VERSION = "2026-04-27-v1";
 
 function withDefaultHeaders(extra?: HeadersInit): Headers {
   const headers = new Headers({
@@ -341,26 +341,43 @@ export async function onRequestPost(context: Context): Promise<Response> {
       ? body.durationValue
       : null;
   const durationUnit = typeof body?.durationUnit === "string" ? body.durationUnit.trim() : "";
+  const sessionLabel = typeof body?.sessionLabel === "string" ? body.sessionLabel.trim() : "";
 
   if (!text) {
     return json({ error: "text is required" }, 400);
   }
 
   const userPrompt = [
-    "请把下面杂乱记录整理为“复盘风格”的 JSON，不要输出 JSON 以外的任何文字。",
-    '字段要求：{"summary":string,"completedContent":string,"issues":string[],"nextActions":string[]}',
-    "要求：summary 一句话（15-35字）；completedContent 1-2句；issues 2-4条；nextActions 2-4条。",
-    "写作规则：",
-    "1) 不要照抄用户原句，不要连续复用原文措辞。",
-    "2) summary 要提炼核心收获或核心问题，不能是原话缩写。",
-    "3) completedContent 要总结“做了什么、识别了什么、推进了什么”。",
-    "4) issues 用更抽象、更专业的表达提炼问题点，不要照搬用户词句。",
-    "5) nextActions 必须具体可执行，必须包含“动作 + 时长/次数 + 检查标准”，不要空话。",
-    "6) 即使原始输入很短，也要补足分析感和复盘感。",
-    "7) 语言自然、简洁、有条理，像认真复盘的助教。",
+    "# 角色设定",
+    "你是一位跨领域专业教练，能从学员日常记录中提取关键行为、诊断问题链，并给出可执行处方。",
+    "",
+    "# 任务流程（先内部思考，再输出）",
+    "请在内部严格执行以下步骤：",
+    "1) 领域识别：从“健身/运动、音乐/声乐、编程/技术、学习/考试、写作/创作、语言学习、艺术/设计、工作/项目、其他”中判断主领域（可多选，按置信度排序）。",
+    "2) 专家角色切换：根据主领域切换到对应教练视角进行分析。",
+    "3) 分析框架：信息结构化提取 + 四层深度诊断（行为/技术/认知/策略）+ 因果链 + 阶段定位 + SMART处方。",
+    "4) 反抄写规则：避免照抄原文句式，不要连续复用用户措辞。",
+    "",
+    "# 输出格式（必须严格遵守）",
+    "你最终只能输出 JSON，且字段必须严格为：summary、completedContent、issues、nextActions。",
+    'JSON 结构：{"summary":string,"completedContent":string,"issues":string[],"nextActions":string[]}',
+    "",
+    "# 字段映射规则",
+    "1) summary：一句“教练视角”核心判断（15-40字），要有总结感，不是原话缩写。",
+    "2) completedContent：2-4句，包含“做了什么、识别了什么、推进了什么”，必要时简要提及阶段定位。",
+    "3) issues：2-4条，使用更抽象/专业表达，描述真正瓶颈而非表层复述。",
+    "4) nextActions：2-4条，每条必须包含“动作 + 时长/次数 + 验收方式（如何判断有效）”。",
+    "5) 当信息不足时，允许基于上下文做谨慎推断，但要避免编造具体事实。",
+    "6) 若结果与原文过于相似，请自动重写为“提炼后的复盘语言”。",
+    "",
+    "# 语气与风格",
+    "专业但亲切，有教练感；简洁、有条理；避免空话。",
+    "",
+    "# 本次记录上下文",
     planTitle ? `计划名称：${planTitle}` : "计划名称：未提供",
+    sessionLabel ? `进度定位：${sessionLabel}` : "进度定位：未提供",
     durationValue ? `本次时长/次数：${durationValue}${durationUnit}` : "本次时长/次数：未提供",
-    `原始记录：${text}`
+    `学员原始记录：${text}`
   ]
     .filter(Boolean)
     .join("\n");
@@ -372,7 +389,7 @@ export async function onRequestPost(context: Context): Promise<Response> {
         {
           role: "system",
           content:
-            "你是成长型训练复盘助教。请在不照抄原文的前提下做提炼与分析。输出必须是 JSON，字段严格为 summary、completedContent、issues、nextActions。"
+            "你是跨领域个人成长教练。请先进行领域识别与深度诊断，再输出高质量复盘结果。禁止照抄原文。输出必须是 JSON，字段严格为 summary、completedContent、issues、nextActions。"
         },
         {
           role: "user",
@@ -400,11 +417,11 @@ export async function onRequestPost(context: Context): Promise<Response> {
     try {
       aiResult = await aiBinding.run(model, {
         messages: [
-          {
-            role: "system",
-            content:
-              "你是成长型训练复盘助教。输出必须是 JSON，字段为 summary、completedContent、issues、nextActions。不要照抄原文。"
-          },
+        {
+          role: "system",
+          content:
+              "你是跨领域成长教练。输出必须是 JSON，字段为 summary、completedContent、issues、nextActions。不要照抄原文。"
+        },
           {
             role: "user",
             content: userPrompt
