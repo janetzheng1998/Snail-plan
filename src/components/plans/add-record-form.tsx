@@ -19,6 +19,7 @@ type AddRecordFormProps = {
   planDetailPath?: string;
 };
 
+const ORGANIZE_API_ENDPOINT = process.env.NEXT_PUBLIC_ORGANIZE_API_URL?.trim() || "/api/organize";
 const sessionUnits = ["节", "次", "天"] as const;
 type SessionUnit = (typeof sessionUnits)[number];
 
@@ -363,7 +364,7 @@ export function AddRecordForm({ planId, planTitle, planDetailPath }: AddRecordFo
     setSaved(false);
 
     try {
-      const response = await fetch("/api/organize", {
+      const response = await fetch(ORGANIZE_API_ENDPOINT, {
         method: "POST",
         headers: {
           "Content-Type": "application/json"

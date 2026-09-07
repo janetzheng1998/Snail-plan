@@ -40,12 +40,22 @@ export const runtime = "nodejs";
 
 const DEEPSEEK_API_URL = "https://api.deepseek.com/chat/completions";
 const DEFAULT_MODEL = "deepseek-chat";
+const DEFAULT_ALLOWED_ORIGIN = "*";
+
+function getCorsHeaders(): HeadersInit {
+  return {
+    "Access-Control-Allow-Origin": process.env.ORGANIZE_API_ALLOWED_ORIGIN || DEFAULT_ALLOWED_ORIGIN,
+    "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type"
+  };
+}
 
 function json(data: unknown, status = 200) {
   return NextResponse.json(data, {
     status,
     headers: {
-      "Cache-Control": "no-store"
+      "Cache-Control": "no-store",
+      ...getCorsHeaders()
     }
   });
 }
@@ -280,5 +290,12 @@ export async function GET() {
     provider: "deepseek",
     model: process.env.DEEPSEEK_MODEL || DEFAULT_MODEL,
     configured: Boolean(process.env.DEEPSEEK_API_KEY)
+  });
+}
+
+export async function OPTIONS() {
+  return new Response(null, {
+    status: 204,
+    headers: getCorsHeaders()
   });
 }
