@@ -44,9 +44,23 @@ function formatDateKey(year: number, month: number, day: number): string {
 }
 
 function buildBriefSummary(record: CalendarRecord): string {
-  const source = record.summary?.trim() || record.organized.completed_content.trim() || record.raw_text.trim();
+  const source =
+    record.summary?.trim() ||
+    record.organized.summary?.trim() ||
+    record.organized.completed_content.trim() ||
+    record.raw_text.trim();
   const normalized = source.replace(/\s+/g, " ");
   return normalized.length > 40 ? `${normalized.slice(0, 40)}...` : normalized;
+}
+
+function getCurrentBlocks(record: CalendarRecord): string[] {
+  return record.organized.current_blocks?.length
+    ? record.organized.current_blocks
+    : record.organized.problems;
+}
+
+function getCleanedRawText(record: CalendarRecord): string {
+  return record.organized.cleaned_raw_text?.trim() || record.raw_text;
 }
 
 function getMonthOptions(records: CalendarRecord[]): MonthOption[] {
@@ -270,25 +284,49 @@ export function RecordCalendar({ records }: RecordCalendarProps) {
                       查看详情
                     </summary>
                     <div className="mt-2 space-y-2 leading-6">
+                      {record.organized.summary ? (
+                        <p>
+                          <span className="font-medium text-ink-900">一句话复盘：</span>
+                          {record.organized.summary}
+                        </p>
+                      ) : null}
                       <p>
-                        <span className="font-medium text-ink-900">本次完成：</span>
+                        <span className="font-medium text-ink-900">本次进展：</span>
                         {record.organized.completed_content}
                       </p>
-                      {record.organized.problems.length > 0 ? (
+                      {record.organized.key_findings?.length ? (
                         <p>
-                          <span className="font-medium text-ink-900">仍需关注：</span>
-                          {record.organized.problems.join("；")}
+                          <span className="font-medium text-ink-900">关键发现：</span>
+                          {record.organized.key_findings.join("；")}
+                        </p>
+                      ) : null}
+                      {getCurrentBlocks(record).length > 0 ? (
+                        <p>
+                          <span className="font-medium text-ink-900">当前卡点：</span>
+                          {getCurrentBlocks(record).join("；")}
+                        </p>
+                      ) : null}
+                      {record.organized.possible_reasons?.length ? (
+                        <p>
+                          <span className="font-medium text-ink-900">可能原因：</span>
+                          {record.organized.possible_reasons.join("；")}
                         </p>
                       ) : null}
                       {record.organized.next_suggestions.length > 0 ? (
                         <p>
-                          <span className="font-medium text-ink-900">下次继续：</span>
+                          <span className="font-medium text-ink-900">下一步建议：</span>
                           {record.organized.next_suggestions.join("；")}
+                        </p>
+                      ) : null}
+                      {record.organized.record_reminders?.length ? (
+                        <p>
+                          <span className="font-medium text-ink-900">下次记录提醒：</span>
+                          {record.organized.record_reminders.join("；")}
                         </p>
                       ) : null}
                       <p>
                         <span className="font-medium text-ink-900">原始记录：</span>
-                        {record.raw_text}
+                        {getCleanedRawText(record)}
                       </p>
                     </div>
                   </details>

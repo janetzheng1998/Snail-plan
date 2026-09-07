@@ -3,9 +3,15 @@ export type ProgressUnit = "次" | "天" | "小时" | "不定时";
 export type RecordUnit = "分钟" | "次" | "天" | "小时";
 
 export type OrganizedRecord = {
+  summary?: string;
+  cleaned_raw_text?: string;
   completed_content: string;
+  key_findings?: string[];
+  current_blocks?: string[];
+  possible_reasons?: string[];
   problems: string[];
   next_suggestions: string[];
+  record_reminders?: string[];
 };
 
 export type PlanRecord = {

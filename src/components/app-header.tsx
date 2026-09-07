@@ -27,17 +27,20 @@ function isActive(currentPath: string, href: string): boolean {
 
 export function AppHeader({ currentPath }: AppHeaderProps) {
   return (
-    <header className="mb-9 rounded-[1.2rem] border border-white/70 bg-white/62 px-4 py-3 shadow-[0_8px_22px_-22px_rgba(31,42,38,0.55)] backdrop-blur sm:px-5">
+    <header className="mb-7 rounded-[1.2rem] border border-white/70 bg-white/62 px-4 py-3 shadow-[0_8px_22px_-22px_rgba(31,42,38,0.55)] backdrop-blur sm:mb-9 sm:px-5">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <BrandLockup size="header" />
 
-        <nav className="flex flex-wrap gap-2" aria-label="主导航">
+        <nav
+          className="-mx-1 flex flex-nowrap gap-2 overflow-x-auto px-1 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+          aria-label="主导航"
+        >
           {navItems.map((item) => (
             <Link
               key={item.href}
               href={item.href}
               className={cn(
-                "rounded-full border px-3 py-1 text-sm transition",
+                "shrink-0 rounded-full border px-3 py-1 text-sm transition",
                 isActive(currentPath, item.href)
                   ? "border-moss-700 bg-moss-700 text-white"
                   : "border-white/80 bg-white/72 text-ink-900/74 hover:border-moss-300 hover:text-moss-700"

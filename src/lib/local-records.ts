@@ -5,9 +5,14 @@ const LOCAL_RECORDS_STORAGE_KEY = "snail-plan-local-records";
 
 export type LocalOrganizedRecord = {
   summary: string;
+  cleanedRawText?: string;
   completedContent: string;
+  keyFindings?: string[];
+  currentBlocks?: string[];
+  possibleReasons?: string[];
   issues: string[];
   nextActions: string[];
+  recordReminders?: string[];
 };
 
 export type LocalRecordSessionUnit = "节" | "次" | "天";
@@ -87,9 +92,15 @@ export function localRecordToPlanRecord(record: LocalRecord): PlanRecord {
     duration_value: record.durationValue ?? 1,
     duration_unit: record.durationUnit ?? "次",
     organized: {
+      summary: record.organized.summary,
+      cleaned_raw_text: record.organized.cleanedRawText,
       completed_content: record.organized.completedContent || record.organized.summary,
+      key_findings: record.organized.keyFindings,
+      current_blocks: record.organized.currentBlocks,
+      possible_reasons: record.organized.possibleReasons,
       problems: record.organized.issues,
-      next_suggestions: record.organized.nextActions
+      next_suggestions: record.organized.nextActions,
+      record_reminders: record.organized.recordReminders
     }
   };
 }

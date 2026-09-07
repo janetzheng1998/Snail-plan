@@ -66,6 +66,7 @@ function buildLocalPreview(
   durationUnit: (typeof recordUnits)[number],
   sessionLabel?: string
 ): LocalOrganizedRecord {
+  const cleanedRawText = cleanDisplayRawText(rawText);
   const sentences = rawText
     .replace(/\s+/g, " ")
     .split(/[。！？!?]/)
@@ -77,7 +78,18 @@ function buildLocalPreview(
 
   return {
     summary: `${sessionPrefix}完成 ${durationValue}${durationUnit} 的记录，核心片段：${shortText}`,
+    cleanedRawText,
     completedContent: `${sessionPrefix}完成 ${durationValue}${durationUnit} 的训练/学习，重点记录：${shortText}`,
+    keyFindings: [
+      "你已经把一次真实行动记录了下来，这是长期积累开始成形的信号。",
+      issueSentence ? "记录里出现了可继续观察的卡点，后续复盘会更有方向。" : "本次信息偏结果记录，下次可以多补充过程感受。"
+    ],
+    currentBlocks: issueSentence ? [issueSentence] : ["本次记录还没有明确写出最主要的阻碍。"],
+    possibleReasons: [
+      issueSentence
+        ? "可能是当前练习方法、状态或反馈标准还不够清晰，需要下次补充更多过程信息。"
+        : "缺少具体卡点、状态变化和判断标准，因此暂时只能先做轻量推测。"
+    ],
     issues: issueSentence
       ? [issueSentence]
       : ["本次记录未明确提到阻碍点，建议下次补充“最卡的一步”。"],
@@ -86,8 +98,27 @@ function buildLocalPreview(
       issueSentence
         ? `围绕“${issueSentence.slice(0, 16)}”做一次 10 分钟分解练习。`
         : "结束后立刻写下 3 行复盘：完成了什么、卡在哪里、下一步做什么。"
+    ],
+    recordReminders: [
+      "记录这次具体做了哪些动作或任务。",
+      "补充最明显的卡点、身体/情绪状态和判断依据。"
     ]
   };
+}
+
+function cleanDisplayRawText(text: string): string {
+  const cleaned = text
+    .replace(/\s+/g, " ")
+    .replace(/(然后呢|然后|就是|那个|嗯+|呃+|啊+|额+)(，|。|\s)*/g, "")
+    .replace(/([，。！？；：])\1+/g, "$1")
+    .replace(/\s*([，。！？；：])\s*/g, "$1")
+    .trim();
+
+  if (!cleaned) {
+    return text.trim();
+  }
+
+  return /[。！？]$/.test(cleaned) ? cleaned : `${cleaned}。`;
 }
 
 function parsePositiveInteger(input: string): number | undefined {
@@ -133,10 +164,16 @@ function normalizeOrganizedResult(
       : (payload as Record<string, unknown>);
 
   const summary = typeof source.summary === "string" ? source.summary.trim() : "";
+  const cleanedRawText = typeof source.cleanedRawText === "string" ? source.cleanedRawText.trim() : "";
   const completedContent =
     typeof source.completedContent === "string" ? source.completedContent.trim() : "";
+  const keyFindings = readStringArray(source.keyFindings);
+  const currentBlocks = readStringArray(source.currentBlocks);
+  const possibleReasons = readStringArray(source.possibleReasons);
   const issues = readStringArray(source.issues);
+  const resolvedIssues = currentBlocks.length > 0 ? currentBlocks : issues;
   const nextActions = readStringArray(source.nextActions);
+  const recordReminders = readStringArray(source.recordReminders);
 
   if (!summary && !completedContent) {
     return null;
@@ -144,9 +181,14 @@ function normalizeOrganizedResult(
 
   return {
     summary: summary || completedContent,
+    cleanedRawText: cleanedRawText || fallback.cleanedRawText,
     completedContent: completedContent || summary,
-    issues: issues.length > 0 ? issues : fallback.issues,
-    nextActions: nextActions.length > 0 ? nextActions : fallback.nextActions
+    keyFindings: keyFindings.length > 0 ? keyFindings : fallback.keyFindings,
+    currentBlocks: currentBlocks.length > 0 ? currentBlocks : fallback.currentBlocks,
+    possibleReasons: possibleReasons.length > 0 ? possibleReasons : fallback.possibleReasons,
+    issues: resolvedIssues.length > 0 ? resolvedIssues : fallback.issues,
+    nextActions: nextActions.length > 0 ? nextActions : fallback.nextActions,
+    recordReminders: recordReminders.length > 0 ? recordReminders : fallback.recordReminders
   };
 }
 
@@ -547,23 +589,48 @@ export function AddRecordForm({ planId, planTitle, planDetailPath }: AddRecordFo
 
         {generated && organizedPreview ? (
           <div className="space-y-4 text-sm leading-7 text-ink-900/85">
-            <div>
-              <p className="font-medium">一句话概括</p>
-              <CardText>{organizedPreview.summary}</CardText>
+            <div className="rounded-2xl border border-moss-100 bg-moss-50/60 p-4">
+              <p className="font-medium">一句话复盘</p>
+              <p className="mt-1 text-ink-900/78">{organizedPreview.summary}</p>
             </div>
-            <div>
-              <p className="font-medium">本次完成内容</p>
-              <CardText>{organizedPreview.completedContent}</CardText>
+
+            <div className="border-t border-moss-100 pt-4">
+              <p className="font-medium">本次进展</p>
+              <p className="mt-1 text-ink-900/78">{organizedPreview.completedContent}</p>
             </div>
-            <div>
-              <p className="font-medium">暴露问题</p>
+
+            {organizedPreview.keyFindings?.length ? (
+              <div className="border-t border-moss-100 pt-4">
+                <p className="font-medium">关键发现</p>
+                <ul className="list-disc space-y-1 pl-5">
+                  {organizedPreview.keyFindings.map((item) => (
+                    <li key={item}>{item}</li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+
+            <div className="border-t border-moss-100 pt-4">
+              <p className="font-medium">当前卡点</p>
               <ul className="list-disc space-y-1 pl-5">
-                {organizedPreview.issues.map((issue) => (
+                {(organizedPreview.currentBlocks?.length ? organizedPreview.currentBlocks : organizedPreview.issues).map((issue) => (
                   <li key={issue}>{issue}</li>
                 ))}
               </ul>
             </div>
-            <div>
+
+            {organizedPreview.possibleReasons?.length ? (
+              <div className="border-t border-moss-100 pt-4">
+                <p className="font-medium">可能原因</p>
+                <ul className="list-disc space-y-1 pl-5">
+                  {organizedPreview.possibleReasons.map((item) => (
+                    <li key={item}>{item}</li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+
+            <div className="border-t border-moss-100 pt-4">
               <p className="font-medium">下一步建议</p>
               <ul className="list-disc space-y-1 pl-5">
                 {organizedPreview.nextActions.map((item) => (
@@ -571,6 +638,26 @@ export function AddRecordForm({ planId, planTitle, planDetailPath }: AddRecordFo
                 ))}
               </ul>
             </div>
+
+            {organizedPreview.recordReminders?.length ? (
+              <div className="border-t border-moss-100 pt-4">
+                <p className="font-medium">下次记录提醒</p>
+                <ul className="list-disc space-y-1 pl-5">
+                  {organizedPreview.recordReminders.map((item) => (
+                    <li key={item}>{item}</li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+
+            <details className="border-t border-moss-100 pt-4">
+              <summary className="cursor-pointer text-sm text-ink-900/58 hover:text-moss-700">
+                展开原始记录
+              </summary>
+              <p className="mt-2 rounded-xl bg-moss-50/60 p-3 text-ink-900/68">
+                {organizedPreview.cleanedRawText || cleanDisplayRawText(rawInput.trim() || fallbackRawText)}
+              </p>
+            </details>
 
             <div className="rounded-xl border border-moss-200 bg-moss-50/70 p-3 text-sm">
               本次记录：
